@@ -8,6 +8,10 @@ Instead of a Claude scheduled task, you can run the reading step with Claude Cod
 - The Gmail connector enabled on that account, and Claude in Chrome installed, with Chrome signed in to Compass.
 - This folder as the working directory, so `instructions.md`, `school.md`, `learnings.md` and `outbox/` are local files.
 
+## Work in the project folder
+
+Open a terminal in the folder and start `claude`. `CLAUDE.md` tells the session what the project is and its hard rules, and `/run-digest` runs the reading step in your session so you can watch it. The headless scripts below do the same unattended.
+
 ## Run it
 
 ```powershell
