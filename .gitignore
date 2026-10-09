@@ -23,3 +23,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Feedback and learnings (personal)
+feedback/
+learnings.md

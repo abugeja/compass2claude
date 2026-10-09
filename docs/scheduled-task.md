@@ -8,11 +8,13 @@ Compass school email digest.
 Read <FOLDER>\instructions.md and <FOLDER>\school.md on this computer
 (stage them with the remote-devices file tools) and follow instructions.md
 exactly. It is the single source of truth for this task. Also read
-manifest.json and list outbox\ and hold\ in that folder as it describes.
+manifest.json, learnings.md (if present) and feedback\inbox.jsonl (if
+present), and list outbox\ and hold\ in that folder as it describes.
 
 Write your output files into <FOLDER>\outbox\ on the computer (write each
 file in the workspace, send it with SendUserFile, then device_commit_files
-to the outbox path). Do not post to Telegram or create calendar events
+to the outbox path). If instructions.md tells you to update learnings.md,
+write it the same way, to <FOLDER>\learnings.md. Do not post to Telegram or create calendar events
 yourself; the local script does that.
 
 If instructions.md, school.md or the folder can't be reached, stop and say

@@ -38,7 +38,7 @@ Claude does the reading and summarising on a schedule. A small local Python scri
 ┃ • Hats required outdoors every day this term
 ```
 
-Each email becomes one post. It starts with a kind tag (🔔 reminder, 📰 newsletter, 📣 news, 💬 message) and a labelled header, followed by **Actions**, **Dates**, and FYI items in quote blocks. Newsletter sections keep their own headings and collapse into expandable quotes when they're long. Links show as tidy labels ("Read the full newsletter"). Long posts split between sections, never mid-section.
+Each email becomes one post. It starts with a kind tag (🔔 reminder, 📰 newsletter, 📣 news, 💬 message) and a labelled header, followed by **Actions**, **Dates**, and FYI items in quote blocks. Actions, dates and FYI items sit in tight quote blocks. A newsletter gets one section per page, with the page's own heading, and long sections collapse into expandable quotes. Links show as tidy labels ("Read the full newsletter"). Long posts split between sections, never mid-section.
 
 The traffic lights are applied in code:
 
@@ -102,6 +102,10 @@ Full walkthrough: [docs/setup.md](docs/setup.md). In short:
 6. In Claude, create a scheduled task that requires this computer, attach this folder, and use the prompt in [docs/scheduled-task.md](docs/scheduled-task.md).
 7. Test with the files in `samples/`.
 
+## Teaching it
+
+Message the bot with what you'd change ("policies in one line", "skip the community page") and the next Claude run folds it into `learnings.md`, which it follows from then on. Reply to a post to say which one you mean. `/learned` shows what it has picked up. Learnings only affect style and coverage, never the privacy rules. Details in [docs/feedback.md](docs/feedback.md).
+
 ## Keeping the bot chat tidy
 
 When you tap **Post** or **Skip**, the preview collapses to a single line (for example "✅ Posted · Disco helpers · 11:42"). Each cycle, decided one-liners older than 6 hours and "For you only" notes older than 24 hours are deleted. Previews still waiting for a decision are never touched. Change the limits in `config.ini [cleanup]`.
@@ -126,9 +130,9 @@ Telegram only lets bots delete their own messages, and only within 48 hours, so 
 | `requirements.txt` | Python packages |
 | `samples/` | Two test posts: one to approve, one to skip |
 | `tests/` | Offline tests (`python -m unittest discover -s tests -v`) |
-| `docs/` | Setup, privacy, file format, scheduled task, troubleshooting |
+| `docs/` | Setup, privacy, file format, scheduled task, feedback, troubleshooting |
 
-Created at runtime and git-ignored: `outbox/`, `pending/`, `sent/`, `hold/`, `failed/`, `manifest.json`, `state.json`, `run.lock`, `compass_post.log`.
+Created at runtime and git-ignored: `outbox/`, `pending/`, `sent/`, `hold/`, `failed/`, `manifest.json`, `state.json`, `run.lock`, `compass_post.log`, `feedback/`, `learnings.md`.
 
 ## Limits
 

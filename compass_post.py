@@ -37,6 +37,8 @@ SENT = BASE / "sent"
 FAILED = BASE / "failed"
 HOLD = BASE / "hold"
 PENDING = BASE / "pending"
+FEEDBACK = BASE / "feedback" / "inbox.jsonl"
+LEARNINGS = BASE / "learnings.md"
 LOCK = BASE / "run.lock"
 MANIFEST = BASE / "manifest.json"
 STATE = BASE / "state.json"
@@ -361,9 +363,9 @@ def render_group_parts(item, actions, dates):
     """The post as a list of parts, so long posts split between sections."""
     parts = [render_header(item, AUDIENCE_LABEL.get(item["audience"]))]
     if actions:
-        parts.append("\n✅ <b>Actions</b>\n" + "\n".join(render_action(a) for a in actions))
+        parts.append("\n✅ <b>Actions</b>\n" + quote([render_action(a) for a in actions]))
     if dates:
-        parts.append("\n📅 <b>Dates</b>\n" + "\n".join(render_date(d) for d in dates))
+        parts.append("\n📅 <b>Dates</b>\n" + quote([render_date(d) for d in dates]))
     newsletter = item.get("kind") == "newsletter"
     for sec in item.get("sections") or []:
         fyi = [f for f in sec.get("fyi") or [] if isinstance(f, str) and f.strip()]
@@ -373,7 +375,7 @@ def render_group_parts(item, actions, dates):
         icon = "📰" if newsletter and head != "FYI" else "ℹ️"
         bullets = [f"• {esc(f)}" for f in fyi]
         parts.append(f"\n{icon} <b>{esc(head)}</b>\n" +
-                     quote(bullets, expandable=newsletter and len(bullets) > 3))
+                     quote(bullets, expandable=newsletter and len(bullets) > 4))
     if item.get("public_link"):
         label = "Read the full newsletter" if newsletter else "More details"
         parts.append(f'\n🔗 <a href="{html.escape(item["public_link"])}">{label}</a>')
@@ -474,6 +476,66 @@ def queue_events(manifest, events):
             queued.add(k)
 
 
+# ---------------------------------------------------------------- feedback
+
+HELP = ("<b>Feedback</b>\n"
+        "Send me any message and it's saved as feedback for the next Claude run. "
+        "Reply to a preview or a note to attach it to that post.\n\n"
+        "/learned shows what has been learned so far.")
+
+
+def feedback_count():
+    try:
+        return sum(1 for line in FEEDBACK.read_text(encoding="utf-8").splitlines() if line.strip())
+    except OSError:
+        return 0
+
+
+def save_feedback(text, about=None):
+    FEEDBACK.parent.mkdir(exist_ok=True)
+    n = feedback_count() + 1
+    rec = {"id": n, "at": stamp(), "text": text.strip()[:2000], "about": about}
+    with open(FEEDBACK, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return n
+
+
+def handle_message(cfg, state, msg):
+    """Owner messages become feedback. Anyone else is ignored."""
+    token = cfg["telegram"]["bot_token"]
+    owner = cfg["telegram"].get("private_chat_id", "").strip()
+    if not owner or msg.get("chat", {}).get("type") != "private" \
+            or str(msg.get("chat", {}).get("id")) != owner \
+            or str((msg.get("from") or {}).get("id")) != owner:
+        return
+    text = (msg.get("text") or msg.get("caption") or "").strip()
+    if not text:
+        return
+    cmd, _, rest = text.partition(" ")
+    cmd = cmd.split("@")[0].lower()
+    if cmd in ("/start", "/help"):
+        send_owner(token, owner, state, HELP, "note", silent=True)
+        return
+    if cmd == "/learned":
+        body = LEARNINGS.read_text(encoding="utf-8").strip() if LEARNINGS.exists() else ""
+        out = esc(body[:3500]) if body else "Nothing learned yet."
+        send_owner(token, owner, state, f"🧠 <b>Learned so far</b>\n{out}", "note", silent=True)
+        return
+    if cmd == "/feedback":
+        text = rest.strip()
+        if not text:
+            send_owner(token, owner, state, HELP, "note", silent=True)
+            return
+    elif text.startswith("/"):
+        send_owner(token, owner, state, HELP, "note", silent=True)
+        return
+    about = ((msg.get("reply_to_message") or {}).get("text") or "")[:300] or None
+    n = save_feedback(text, about)
+    send_owner(token, owner, state,
+               f"📝 Noted (#{n}). It will be applied from the next run.", "note", silent=True)
+    log.info("feedback #%d saved", n)
+
+
 # ---------------------------------------------------------------- approvals
 
 def handle_callbacks(cfg, manifest, state, timeout=0):
@@ -481,9 +543,15 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
     owner = cfg["telegram"].get("private_chat_id", "").strip()
     updates = tg_call(token, "getUpdates", {
         "offset": state.get("offset", 0), "timeout": timeout,
-        "allowed_updates": ["callback_query"]})
+        "allowed_updates": ["callback_query", "message"]})
     for u in updates:
         state["offset"] = u["update_id"] + 1
+        if u.get("message"):
+            try:
+                handle_message(cfg, state, u["message"])
+            except Exception:
+                log.exception("feedback handling failed")
+            continue
         cq = u.get("callback_query")
         if not cq:
             continue
@@ -650,7 +718,7 @@ def apply_school_settings(cfg):
 
 
 def main():
-    for d in (OUTBOX, SENT, FAILED, HOLD, PENDING):
+    for d in (OUTBOX, SENT, FAILED, HOLD, PENDING, FEEDBACK.parent):
         d.mkdir(exist_ok=True)
     cfg = configparser.ConfigParser()
     if not cfg.read(CONFIG, encoding="utf-8"):

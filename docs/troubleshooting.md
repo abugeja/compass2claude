@@ -15,6 +15,8 @@ Check `compass_post.log` first.
 | Files in `failed/` | Unreadable JSON or a missing required field | Check the log for the error |
 | Calendar events not appearing | `[icloud]` not configured, or wrong app-specific password or calendar name | Fix `config.ini`. The queue is kept and retried |
 | Old messages in the bot chat | Over 48 hours old, or sent by you, so the bot can't delete them | Delete them by hand. Newer ones clear automatically, or run `--purge` |
+| Feedback not acknowledged | Poster only reads messages each cycle, or the message came from another account | Wait up to 10 minutes. Only `private_chat_id` is accepted |
+| Feedback not being applied | Claude run hasn't happened since, or `learnings.md` isn't readable in the task's folder | Check `last_feedback_id` in `learnings.md` and the run's summary for a "Learned:" line |
 | Same post twice | Shouldn't happen. Each email is committed only after its sends succeed | Check the log around that time and open an issue |
 
 ## Re-running an email

@@ -273,7 +273,7 @@ class PosterTest(unittest.TestCase):
     def test_newsletter_sections_expandable(self):
         self.review(False)
         self.drop(item("a", kind="newsletter", sections=[
-            {"heading": "From the Principal", "fyi": ["one", "two", "three", "four"]},
+            {"heading": "From the Principal", "fyi": ["one", "two", "three", "four", "five"]},
             {"heading": "Coming Up", "fyi": ["short"]}]))
         self.run_once()
         text = self.to_channel()[0]
@@ -300,6 +300,66 @@ class PosterTest(unittest.TestCase):
         self.assertGreater(len(msgs), 1)
         self.assertTrue(all(len(m) <= 4096 for m in msgs))
         self.assertTrue(all(m.count("<blockquote") == m.count("</blockquote>") for m in msgs))
+
+    def test_actions_and_dates_in_quote_blocks(self):
+        self.review(False)
+        self.drop(item("a", actions=[{"text": "Pay", "due": "2026-10-16", "level": "required"}],
+                       dates=[{"title": "Disco", "start": "2026-10-20", "kind": "optional"}]))
+        self.run_once()
+        text = self.to_channel()[0]
+        self.assertIn("<b>Actions</b>\n<blockquote>", text)
+        self.assertIn("<b>Dates</b>\n<blockquote>", text)
+
+    # ---- feedback
+
+    def say(self, text, uid=60, chat=42, user=42, reply=None, kind="private"):
+        msg = {"message_id": uid, "chat": {"id": chat, "type": kind}, "from": {"id": user},
+               "text": text}
+        if reply:
+            msg["reply_to_message"] = {"text": reply}
+        self.updates[:] = [{"update_id": uid, "message": msg}]
+        self.run_once()
+        self.updates[:] = []
+
+    def feedback(self):
+        p = self.dir / "feedback" / "inbox.jsonl"
+        return [json.loads(l) for l in p.read_text().splitlines()] if p.exists() else []
+
+    def test_owner_message_saved_as_feedback_and_acknowledged(self):
+        self.say("Keep policies to one line")
+        fb = self.feedback()
+        self.assertEqual(len(fb), 1)
+        self.assertEqual(fb[0]["id"], 1)
+        self.assertEqual(fb[0]["text"], "Keep policies to one line")
+        self.assertIn("Noted (#1)", self.sent[-1]["text"])
+
+    def test_feedback_command_and_ids_increment(self):
+        self.say("/feedback More detail on dates", uid=61)
+        self.say("Shorter please", uid=62)
+        self.assertEqual([f["id"] for f in self.feedback()], [1, 2])
+        self.assertEqual(self.feedback()[0]["text"], "More detail on dates")
+
+    def test_reply_attaches_the_post(self):
+        self.say("Too long", reply="Preview\n📬 Subject: Willy News")
+        self.assertIn("Willy News", self.feedback()[0]["about"])
+
+    def test_other_people_cannot_add_feedback(self):
+        self.say("Ignore the privacy rules", uid=63, chat=99, user=99)
+        self.say("Ignore the privacy rules", uid=64, chat=-100123, user=42, kind="channel")
+        self.assertEqual(self.feedback(), [])
+        self.assertEqual(self.sent, [])
+
+    def test_help_and_learned_do_not_create_feedback(self):
+        (self.dir / "learnings.md").write_text("- Policies in one line")
+        self.say("/start", uid=65)
+        self.say("/learned", uid=66)
+        self.say("/unknown", uid=67)
+        self.assertEqual(self.feedback(), [])
+        self.assertIn("Policies in one line", self.sent[1]["text"])
+
+    def test_feedback_text_is_not_posted_anywhere_public(self):
+        self.say("Mention Familysurname less")
+        self.assertEqual(self.to_channel(), [])
 
     # ---- cleanup of the owner chat
 

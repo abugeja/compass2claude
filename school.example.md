@@ -16,7 +16,8 @@ Copy this file to `school.md` and fill it in. `school.md` is git-ignored. The Cl
 If "News:" items link on to a newsletter hosted elsewhere, describe it here so the run knows how to read it. Delete this section if not used.
 
 - **Site:** newsletters.example.com
-- **How it's laid out:** numbered pages (`/page/1`, `/page/2` …). Read "From the Principal", "Dates to Remember" and "Coming Up". Skip digital learning, policies and community pages unless they hold a date or action.
+- **How it's laid out:** numbered pages (`/page/1`, `/page/2` …). Read every page listed under "In this issue" except the skip list below.
+- **Skip pages:** Digital Learning, and the page for the kids' club (shown with its logo, titled "Page 3")
 
 ## Allowed links
 
