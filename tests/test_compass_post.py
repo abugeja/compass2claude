@@ -211,6 +211,69 @@ class PosterTest(unittest.TestCase):
         self.assertEqual(self.sent, [])
         self.assertTrue((self.dir / "outbox" / "a.json").exists())
 
+    # ---- layout
+
+    def test_header_labels_and_kind_tag(self):
+        self.drop(item("a", kind="reminder", audience="prep", subject="Excursion reminder",
+                       received="2026-10-05T09:14",
+                       actions=[{"text": "Pay", "due": "2026-10-16", "level": "required"}]))
+        self.run_once()
+        text = self.previews()[0]["text"]
+        self.assertIn("🔔 REMINDER", text)
+        self.assertIn("📬 <b>Subject:</b> Excursion reminder", text)
+        self.assertIn("👥 <b>To:</b> Prep families", text)
+        self.assertIn("🕒 <b>Date:</b> Mon 5 Oct, 9:14am", text)
+        self.assertIn("✅ <b>Actions</b>", text)
+
+    def test_legend_not_in_posts(self):
+        self.review(False)
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        self.assertNotIn("How to read", self.to_channel()[0])
+
+    def test_pin_legend(self):
+        calls = []
+        orig = self._fake
+        def rec(token, method, params):
+            calls.append(method)
+            return orig(token, method, params)
+        self.m.tg_call = rec
+        sys.argv = ["compass_post.py", "--pin-legend"]
+        self.m.main()
+        self.assertIn("pinChatMessage", calls)
+        self.assertIn("How to read", self.to_channel()[0])
+
+    def test_newsletter_sections_expandable(self):
+        self.review(False)
+        self.drop(item("a", kind="newsletter", sections=[
+            {"heading": "From the Principal", "fyi": ["one", "two", "three", "four"]},
+            {"heading": "Coming Up", "fyi": ["short"]}]))
+        self.run_once()
+        text = self.to_channel()[0]
+        self.assertIn("<blockquote expandable>", text)
+        self.assertIn("<blockquote>• short", text)
+
+    def test_link_rendered_as_anchor_and_checked(self):
+        self.review(False)
+        self.drop(item("ok", sections=[{"heading": "FYI", "fyi": ["x"]}],
+                       public_link="https://compasstix.com/e/abc"),
+                  item("bad", sections=[{"heading": "FYI", "fyi": ["y"]}],
+                       public_link="https://phish.example.org/e/abc"))
+        self.run_once()
+        self.assertEqual(len(self.to_channel()), 1)
+        self.assertIn('href="https://compasstix.com/e/abc"', self.to_channel()[0])
+        self.assertEqual(self.manifest()["bad"]["group_status"], "withheld")
+
+    def test_long_post_splits_between_sections(self):
+        self.review(False)
+        secs = [{"heading": f"S{i}", "fyi": ["x" * 300] * 3} for i in range(8)]
+        self.drop(item("a", kind="newsletter", sections=secs))
+        self.run_once()
+        msgs = self.to_channel()
+        self.assertGreater(len(msgs), 1)
+        self.assertTrue(all(len(m) <= 4096 for m in msgs))
+        self.assertTrue(all(m.count("<blockquote") == m.count("</blockquote>") for m in msgs))
+
     # ---- behaviour
 
     def test_repeat_reminder_dropped(self):
@@ -253,7 +316,8 @@ class PosterTest(unittest.TestCase):
         f = self.m.fmt_range
         self.assertEqual(f({"start": "2026-10-25T12:00", "end": "2026-10-25T15:00"}), "Sun 25 Oct, 12–3pm")
         self.assertEqual(f({"start": "2026-10-23T11:00", "end": "2026-10-23T13:00"}), "Fri 23 Oct, 11am–1pm")
-        self.assertEqual(f({"start": "2026-11-02", "end": "2026-11-04", "all_day": True}), "Mon 2 Nov – Wed 4 Nov")
+        self.assertEqual(f({"start": "2026-11-02", "end": "2026-11-04", "all_day": True}), "Mon 2 – Wed 4 Nov")
+        self.assertEqual(f({"start": "2026-11-30", "end": "2026-12-02", "all_day": True}), "Mon 30 Nov – Wed 2 Dec")
 
     def test_send_failure_retries_cleanly(self):
         self.review(False)

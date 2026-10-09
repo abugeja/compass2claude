@@ -1,0 +1,12 @@
+{"schema": 2, "source_id": "sample-approve-2", "kind": "news",
+ "subject": "TEST: new layout, tap Post to channel",
+ "re_line": null, "from": "Setup test", "received": "2026-10-09T11:30", "audience": "prep",
+ "actions": [
+   {"text": "Nothing to do, this shows a required action due soon", "due": "2026-10-10T17:00", "level": "required"},
+   {"text": "And an optional one", "due": null, "level": "optional"}],
+ "dates": [
+   {"title": "Example no-school day", "start": "2026-11-02", "end": "2026-11-04", "all_day": true, "kind": "no_school", "note": null},
+   {"title": "Example excursion", "start": "2026-10-21", "all_day": true, "kind": "attend", "note": "Bring a packed lunch"},
+   {"title": "Example social event", "start": "2026-10-23T19:00", "end": "2026-10-23T23:00", "all_day": false, "kind": "optional", "note": null}],
+ "sections": [{"heading": "FYI", "fyi": ["If you can read this in the channel, approvals and the new layout work."]}],
+ "public_link": "https://compasstix.com", "private": null}

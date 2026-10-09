@@ -39,6 +39,12 @@ These three files are git-ignored. Keep them that way.
 
 If you ever paste the token somewhere you shouldn't, send `/revoke` to @BotFather and update `config.ini`.
 
+Finally, pin the colour key in the channel. Give the bot the "Pin messages" admin right first.
+
+```powershell
+python compass_post.py --pin-legend
+```
+
 ## 4. Schedule the poster
 
 Run it every 10 minutes:
@@ -67,7 +73,7 @@ copy samples\*.json outbox\
 python compass_post.py
 ```
 
-You should get two previews in Telegram. Tap **Post to channel** on TEST 1 and **Skip** on TEST 2. Then delete TEST 1 from the channel.
+You should get two previews in Telegram. Tap **Post to channel** on the first test and **Skip** on the second. Then delete the test post from the channel.
 
 Then trigger the Claude task once from the app and watch the previews arrive.
 

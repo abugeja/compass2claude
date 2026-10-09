@@ -45,14 +45,20 @@ TERMS = BASE / "private_terms.txt"
 LOG = BASE / "compass_post.log"
 TZ_NAME = "Australia/Melbourne"  # overridden by [school] timezone
 TG_LIMIT = 3800
-DIVIDER = "━━━━━━━━━━━━━━"
+DIVIDER = "━━━━━━━━━━━━━━━━━━"
 
 GROUP_AUDIENCES_DEFAULT = "school, prep, class"
-AUDIENCE_LABEL = {"school": "Whole school", "prep": "Year level", "class": "Class"}
+AUDIENCE_LABEL = {"school": "All families", "prep": "Year level families", "class": "Class families"}
 LINK_ALLOW_DEFAULT = "compasstix.com"
 
 RED, AMBER, GREEN = "🔴", "🟡", "🟢"
-LEGEND = f"<i>{RED} act now / no school  {AMBER} plan for it  {GREEN} optional</i>"
+LEGEND = (f"<b>How to read these posts</b>\n\n"
+          f"{RED} Act now, or no school / routine change\n"
+          f"{AMBER} Plan for it, or a due date coming up\n"
+          f"{GREEN} Optional or social\n\n"
+          f"🔔 reminder  ·  📰 newsletter  ·  📣 news  ·  💬 message")
+KIND_TAG = {"reminder": "🔔 REMINDER", "newsletter": "📰 NEWSLETTER",
+            "news": "📣 NEWS", "message": "💬 MESSAGE"}
 
 logging.basicConfig(filename=LOG, level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -97,16 +103,32 @@ def tg_call(token, method, params):
     return body["result"]
 
 
+def split_oversized(block):
+    """A single part longer than a message: drop quote tags and split by line."""
+    if len(block) <= TG_LIMIT:
+        return [block]
+    plain = re.sub(r"</?blockquote[^>]*>", "", block)
+    out, buf = [], ""
+    for line in plain.split("\n"):
+        if len(buf) + len(line) + 1 > TG_LIMIT and buf:
+            out.append(buf)
+            buf = line
+        else:
+            buf = f"{buf}\n{line}" if buf else line
+    return out + ([buf] if buf else [])
+
+
 def chunk_blocks(blocks, header=""):
     """Join blocks into messages under the Telegram size limit."""
     msgs, buf = [], header
-    for b in blocks:
-        piece = ("\n" if buf else "") + b
-        if len(buf) + len(piece) > TG_LIMIT and buf:
-            msgs.append(buf)
-            buf = b
-        else:
-            buf += piece
+    for big in blocks:
+        for b in split_oversized(big):
+            piece = ("\n" if buf else "") + b
+            if len(buf) + len(piece) > TG_LIMIT and buf:
+                msgs.append(buf)
+                buf = b
+            else:
+                buf += piece
     if buf:
         msgs.append(buf)
     return msgs
@@ -203,6 +225,8 @@ def fmt_range(d):
     start, end = parse_when(d.get("start")), parse_when(d.get("end"))
     if d.get("all_day") or "T" not in (d.get("start") or ""):
         if end and end.date() != start.date():
+            if (start.year, start.month) == (end.year, end.month):
+                return f"{start.strftime('%a')} {start.day} – {fmt_day(end)}"
             return f"{fmt_day(start)} – {fmt_day(end)}"
         return fmt_day(start)
     if end and end.date() == start.date():
@@ -233,49 +257,70 @@ def render_action(a):
     line = f"{action_light(a)} {esc(a.get('text'))}"
     due = parse_when(a.get("due"))
     if due:
-        line += f", by {fmt_day(due)}"
-        if "T" in a["due"]:
-            line += f" {fmt_time(due)}"
+        when = fmt_day(due) + (f" {fmt_time(due)}" if "T" in a["due"] else "")
+        line += f"\n      ↳ <i>by {when}</i>"
     return line
 
 
 def render_date(d):
-    line = f"{date_light(d)} {fmt_range(d)} · {esc(d.get('title'))}"
+    line = f"{date_light(d)} <b>{fmt_range(d)}</b> · {esc(d.get('title'))}"
     if d.get("note"):
-        line += f" ({esc(d['note'])})"
+        line += f"\n      ↳ <i>{esc(d['note'])}</i>"
     return line
 
 
-def render_header(item, audience_label=None):
+def render_header(item, audience_label=None, tag=True):
     rec = parse_when(item.get("received"))
-    when = f"{fmt_day(rec)}, {fmt_time(rec)}" if rec and "T" in item["received"] else (
-        fmt_day(rec) if rec else "")
-    bits = [esc(item.get("from") or "School"), when]
+    when = (f"{fmt_day(rec)}, {fmt_time(rec)}" if rec and "T" in item["received"]
+            else fmt_day(rec) if rec else "")
+    lines = [DIVIDER]
+    if tag:
+        lines.append(f"<b>{KIND_TAG.get(item.get('kind'), '📌 UPDATE')}</b>")
+    lines.append(f"📬 <b>Subject:</b> {esc(item.get('subject'))}")
     if audience_label:
-        bits.append(audience_label)
-    return f"<b>{esc(item.get('subject'))}</b>\n" + " · ".join(b for b in bits if b)
+        lines.append(f"👥 <b>To:</b> {esc(audience_label)}")
+    else:
+        lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
+    if when:
+        lines.append(f"🕒 <b>Date:</b> {when}")
+    return "\n".join(lines)
+
+
+def quote(lines, expandable=False):
+    body = "\n".join(lines)
+    return (f"<blockquote expandable>{body}</blockquote>" if expandable
+            else f"<blockquote>{body}</blockquote>")
+
+
+def render_group_parts(item, actions, dates):
+    """The post as a list of parts, so long posts split between sections."""
+    parts = [render_header(item, AUDIENCE_LABEL.get(item["audience"]))]
+    if actions:
+        parts.append("\n✅ <b>Actions</b>\n" + "\n".join(render_action(a) for a in actions))
+    if dates:
+        parts.append("\n📅 <b>Dates</b>\n" + "\n".join(render_date(d) for d in dates))
+    newsletter = item.get("kind") == "newsletter"
+    for sec in item.get("sections") or []:
+        fyi = [f for f in sec.get("fyi") or [] if isinstance(f, str) and f.strip()]
+        if not fyi:
+            continue
+        head = sec.get("heading") or "FYI"
+        icon = "📰" if newsletter and head != "FYI" else "ℹ️"
+        bullets = [f"• {esc(f)}" for f in fyi]
+        parts.append(f"\n{icon} <b>{esc(head)}</b>\n" +
+                     quote(bullets, expandable=newsletter and len(bullets) > 3))
+    if item.get("public_link"):
+        label = "Read the full newsletter" if newsletter else "More details"
+        parts.append(f'\n🔗 <a href="{html.escape(item["public_link"])}">{label}</a>')
+    return parts
 
 
 def render_group_block(item, actions, dates):
-    parts = [DIVIDER, render_header(item, AUDIENCE_LABEL.get(item["audience"]))]
-    if actions:
-        parts.append("\n<b>Actions</b>\n" + "\n".join(render_action(a) for a in actions))
-    if dates:
-        parts.append("\n<b>Dates</b>\n" + "\n".join(render_date(d) for d in dates))
-    for sec in item.get("sections") or []:
-        fyi = [f for f in sec.get("fyi") or [] if isinstance(f, str) and f.strip()]
-        if fyi:
-            head = sec.get("heading") or "FYI"
-            parts.append(f"\n<b>{esc(head)}</b>\n" + "\n".join(f"• {esc(f)}" for f in fyi))
-    if item.get("public_link"):
-        parts.append(f"\nFull details: {esc(item['public_link'])}")
-    return "\n".join(parts)
+    return "\n".join(render_group_parts(item, actions, dates))
 
 
 def render_private_block(item, note_lines):
-    parts = [DIVIDER, render_header(item)]
-    parts.extend(note_lines)
-    return "\n".join(parts)
+    return render_header(item, tag=False) + "\n" + "\n".join(note_lines)
 
 
 # ---------------------------------------------------------------- calendar
@@ -485,6 +530,7 @@ def process_outbox(cfg, manifest, paths):
                     group_blocks.append(block)
                     group_items.append(sid)
                     rec["group_text"] = block
+                    rec["_parts"] = render_group_parts(item, actions, dates)
                     for a in actions:
                         posted_keys.append(action_key(a))
                     for d in dates:
@@ -522,7 +568,7 @@ def apply_school_settings(cfg):
     TZ_NAME = cfg.get("school", "timezone", fallback=TZ_NAME)
     year = cfg.get("school", "year_label", fallback="").strip()
     if year:
-        AUDIENCE_LABEL["prep"] = year
+        AUDIENCE_LABEL["prep"] = f"{year} families"
         AUDIENCE_LABEL["class"] = cfg.get("school", "class_label", fallback=f"{year} class")
 
 
@@ -534,6 +580,14 @@ def main():
         sys.exit("config.ini missing")
     apply_school_settings(cfg)
     token = cfg["telegram"]["bot_token"]
+
+    if "--pin-legend" in sys.argv:
+        msg = tg_send(token, cfg["telegram"]["channel_id"], LEGEND, silent=True)
+        tg_call(token, "pinChatMessage", {"chat_id": cfg["telegram"]["channel_id"],
+                                          "message_id": msg["message_id"],
+                                          "disable_notification": "true"})
+        print("Legend posted and pinned.")
+        return
 
     if "--whoami" in sys.argv:
         for u in tg_call(token, "getUpdates", {}):
@@ -651,7 +705,7 @@ def _send(cfg, token, owner, review, manifest, group_blocks, group_items, privat
     auto_kinds = {k.strip() for k in cfg.get(
         "group", "auto_post_kinds", fallback="").split(",") if k.strip()}
     for block, sid in zip(group_blocks, group_items):
-        msgs = chunk_blocks([block, LEGEND])
+        msgs = chunk_blocks(manifest["processed"][sid].pop("_parts", None) or [block])
         kind = manifest["processed"][sid].get("kind")
         if review and kind not in auto_kinds:
             batch_id = uuid.uuid4().hex[:12]

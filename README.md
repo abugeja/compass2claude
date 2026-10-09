@@ -19,25 +19,36 @@ Claude does the reading and summarising on a schedule. A small local Python scri
 ## What a post looks like
 
 ```
-━━━━━━━━━━━━━━
-Event Reminder: Year Level Aquarium Excursion
-Example Primary · Mon 5 Oct, 9:14am · Prep
+━━━━━━━━━━━━━━━━━━
+🔔 REMINDER
+📬 Subject: Event Reminder: Aquarium Excursion
+👥 To: Prep families
+🕒 Date: Mon 5 Oct, 9:14am
 
-Actions
-🟡 Pay and give consent for the excursion on Compass, by Fri 16 Oct 11:59pm
+✅ Actions
+🟡 Pay and give consent for the excursion on Compass
+      ↳ by Fri 16 Oct 11:59pm
 
-Dates
+📅 Dates
 🟡 Wed 21 Oct · Aquarium excursion
-🔴 act now / no school  🟡 plan for it  🟢 optional
+      ↳ Bring a packed lunch
+🔴 Mon 2 – Wed 4 Nov · No school (curriculum days)
+
+ℹ️ FYI
+┃ • Hats required outdoors every day this term
 ```
 
-Each email gets a header (subject, sender, date and time, audience), then **Actions**, **Dates**, and FYI items under the newsletter's own section headings. A divider separates emails. The traffic lights are applied in code:
+Each email becomes one post. It starts with a kind tag (🔔 reminder, 📰 newsletter, 📣 news, 💬 message) and a labelled header, followed by **Actions**, **Dates**, and FYI items in quote blocks. Newsletter sections keep their own headings and collapse into expandable quotes when they're long. Links show as tidy labels ("Read the full newsletter"). Long posts split between sections, never mid-section.
+
+The traffic lights are applied in code:
 
 | | Actions | Dates |
 |---|---|---|
 | 🔴 | Required, due within 3 days | No school, early finish, routine change |
 | 🟡 | Required, due later | Something your child attends |
 | 🟢 | Optional (tickets, volunteering) | Optional or social events |
+
+The key isn't repeated on every post. Run `python compass_post.py --pin-legend` once to post it and pin it at the top of the channel. The bot needs the "Pin messages" admin right.
 
 ## Privacy guardrails
 
