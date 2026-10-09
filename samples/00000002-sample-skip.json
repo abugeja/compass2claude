@@ -1,0 +1,6 @@
+{"schema": 2, "source_id": "sample-skip", "kind": "message",
+ "subject": "TEST 2 of 2: tap Skip",
+ "from": "Setup test", "received": "2026-01-01T09:00", "audience": "school",
+ "actions": [], "dates": [],
+ "sections": [{"heading": "FYI", "fyi": ["This one should never appear in the channel."]}],
+ "public_link": null, "private": null}

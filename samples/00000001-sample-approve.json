@@ -1,0 +1,7 @@
+{"schema": 2, "source_id": "sample-approve", "kind": "message",
+ "subject": "TEST 1 of 2: tap Post to channel",
+ "from": "Setup test", "received": "2026-01-01T09:00", "audience": "school",
+ "actions": [{"text": "Nothing to do, this is a setup test", "due": null, "level": "optional"}],
+ "dates": [],
+ "sections": [{"heading": "FYI", "fyi": ["If you can read this in the channel, approvals work."]}],
+ "public_link": null, "private": null}

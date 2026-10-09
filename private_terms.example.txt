@@ -1,0 +1,20 @@
+# Copy this file to private_terms.txt and fill it in. private_terms.txt
+# is git-ignored and stays on this computer.
+#
+# Words that must never appear in a channel post, one per line. Matching
+# ignores case and matches whole words. Anything after # is ignored.
+# If any of these appear, the whole email is kept out of the channel and
+# sent to you privately with the reason.
+#
+# Good things to list:
+#   - your child's first name and any nicknames
+#   - your family surname
+#   - your own and your partner's first names
+#   - names of other children you know in the class
+#   - your Compass user ID (the userId= number in Compass links)
+#
+# Bear in mind a common first name will also block a staff member who
+# shares it. That errs on the safe side.
+
+ChildFirstName
+FamilySurname

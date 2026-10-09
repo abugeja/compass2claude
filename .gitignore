@@ -1,0 +1,25 @@
+# Local settings and secrets: never commit
+config.ini
+school.md
+private_terms.txt
+
+# Runtime state
+manifest.json
+state.json
+*.log
+*.tmp
+*.attempts
+
+# Work folders
+outbox/
+pending/
+sent/
+hold/
+failed/
+superseded/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
