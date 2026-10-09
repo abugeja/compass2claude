@@ -8,6 +8,8 @@ Follow `instructions.md` exactly. It is the single source of truth for the run. 
 
 The `/run-digest` command does this in one step.
 
+Older installs also have `wps_post.py`, a two-line shim that calls `compass_post.main()` so an existing Task Scheduler entry keeps working. `compass_post.py` is the real poster and `compass_post.log` is its log. `wps_post.log` is stale.
+
 ## Hard rules
 
 - The channel is seen by other parents. Nothing about any individual child or family may go in the group fields of an outbox file. When in doubt, the email is `family`.
