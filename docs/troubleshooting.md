@@ -14,6 +14,7 @@ Check `compass_post.log` first.
 | Files in `hold/` | Old or unknown format | Delete them, or ask Claude to rewrite them in schema 2 |
 | Files in `failed/` | Unreadable JSON or a missing required field | Check the log for the error |
 | Calendar events not appearing | `[icloud]` not configured, or wrong app-specific password or calendar name | Fix `config.ini`. The queue is kept and retried |
+| Old messages in the bot chat | Over 48 hours old, or sent by you, so the bot can't delete them | Delete them by hand. Newer ones clear automatically, or run `--purge` |
 | Same post twice | Shouldn't happen. Each email is committed only after its sends succeed | Check the log around that time and open an issue |
 
 ## Re-running an email

@@ -144,6 +144,71 @@ def tg_send(token, chat_id, text, buttons=None, silent=False):
     return tg_call(token, "sendMessage", params)
 
 
+def send_owner(token, owner, state, text, kind, batch=None, buttons=None, silent=False):
+    """Send to the owner and remember the message so it can be cleaned up."""
+    res = tg_send(token, owner, text, buttons=buttons, silent=silent)
+    state.setdefault("owner_msgs", []).append({
+        "id": res.get("message_id"), "kind": kind, "batch": batch,
+        "sent": stamp(), "decided": None})
+    return res
+
+
+def delete_owner_msgs(token, owner, ids):
+    """Delete bot messages from the owner chat. Missing or too-old messages
+    are skipped; Telegram only allows deleting within 48 hours."""
+    ids = sorted({i for i in ids if i})
+    for n in range(0, len(ids), 100):
+        chunk = ids[n:n + 100]
+        try:
+            tg_call(token, "deleteMessages", {"chat_id": owner, "message_ids": chunk})
+        except Exception:
+            for i in chunk:
+                try:
+                    tg_call(token, "deleteMessage", {"chat_id": owner, "message_id": i})
+                except Exception:
+                    pass
+
+
+def cleanup_owner_chat(cfg, token, owner, state):
+    """Delete decided previews and old notes; never touch pending previews."""
+    if not cfg.getboolean("cleanup", "enabled", fallback=True):
+        return
+    keep_decided = cfg.getfloat("cleanup", "keep_decided_hours", fallback=6)
+    keep_notes = cfg.getfloat("cleanup", "keep_notes_hours", fallback=24)
+    t = now()
+    doomed, kept = [], []
+    for m in state.get("owner_msgs", []):
+        sent = datetime.fromisoformat(m["sent"])
+        if (t - sent).total_seconds() > 47 * 3600:
+            continue  # too old for Telegram to delete; stop tracking it
+        if m["kind"] == "preview":
+            if m.get("decided") and (t - datetime.fromisoformat(m["decided"])).total_seconds() \
+                    > keep_decided * 3600:
+                doomed.append(m["id"])
+                continue
+        elif (t - sent).total_seconds() > keep_notes * 3600:
+            doomed.append(m["id"])
+            continue
+        kept.append(m)
+    if doomed:
+        delete_owner_msgs(token, owner, doomed)
+        log.info("cleanup: deleted %d bot messages", len(doomed))
+    state["owner_msgs"] = kept
+
+
+def purge_owner_chat(cfg, token, owner, state, sweep=1000):
+    """Delete every bot message in the owner chat except pending previews.
+    Also sweeps message ids sent before tracking existed."""
+    pending_batches = {p.stem for p in PENDING.glob("*.json")}
+    keep_ids = {m["id"] for m in state.get("owner_msgs", [])
+                if m["kind"] == "preview" and m.get("batch") in pending_batches}
+    probe = tg_send(token, owner, "Cleaning up…", silent=True)["message_id"]
+    ids = [i for i in range(max(1, probe - sweep), probe + 1) if i not in keep_ids]
+    delete_owner_msgs(token, owner, ids)
+    state["owner_msgs"] = [m for m in state.get("owner_msgs", []) if m["id"] in keep_ids]
+    return len(ids)
+
+
 # ---------------------------------------------------------------- guardrails
 
 def load_terms():
@@ -448,14 +513,26 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
         tg_call(token, "answerCallbackQuery",
                 {"callback_query_id": cq["id"],
                  "text": "Posted to the channel." if outcome == "posted" else "Skipped."})
-        tg_call(token, "editMessageReplyMarkup", {
-            "chat_id": cq["message"]["chat"]["id"],
-            "message_id": cq["message"]["message_id"],
-            "reply_markup": {"inline_keyboard": []}})
-        subj = ", ".join(manifest["processed"].get(s, {}).get("subject") or s
-                         for s in batch["items"])
-        tg_send(token, owner, (f"Posted to the channel: {esc(subj)}" if outcome == "posted"
-                else f"Skipped, nothing went to the channel: {esc(subj)}"), silent=True)
+        subj = ", ".join(manifest["processed"].get(i, {}).get("subject") or i
+                         for i in batch["items"])
+        icon, word = ("✅", "Posted") if outcome == "posted" else ("⏭️", "Skipped")
+        line = f"{icon} <b>{word}</b> · {esc(subj)} · {fmt_time(now())}"
+        button_msg = cq["message"]["message_id"]
+        try:
+            tg_call(token, "editMessageText", {
+                "chat_id": owner, "message_id": button_msg, "text": line,
+                "parse_mode": "HTML", "reply_markup": {"inline_keyboard": []}})
+        except Exception:
+            log.exception("could not collapse preview")
+        extra = []
+        for m in state.get("owner_msgs", []):
+            if m.get("batch") == batch_id:
+                m["decided"] = stamp()
+                if m["id"] != button_msg:
+                    extra.append(m["id"])
+        if extra:
+            delete_owner_msgs(token, owner, extra)
+            state["owner_msgs"] = [m for m in state["owner_msgs"] if m["id"] not in extra]
     save_json(STATE, state)
 
 
@@ -589,6 +666,21 @@ def main():
         print("Legend posted and pinned.")
         return
 
+    if "--purge" in sys.argv:
+        owner = cfg["telegram"].get("private_chat_id", "").strip()
+        if not owner:
+            sys.exit("private_chat_id is empty")
+        if not take_lock():
+            sys.exit("The poster is running; try again in a few minutes.")
+        try:
+            state = load_json(STATE, {})
+            n = purge_owner_chat(cfg, token, owner, state)
+            save_json(STATE, state)
+        finally:
+            LOCK.unlink(missing_ok=True)
+        print(f"Cleared the bot chat (checked {n} message ids). Pending previews kept.")
+        return
+
     if "--whoami" in sys.argv:
         for u in tg_call(token, "getUpdates", {}):
             chat = (u.get("message") or u.get("channel_post") or {}).get("chat", {})
@@ -656,13 +748,19 @@ def run(cfg, token):
         if any(OUTBOX.glob("*.json")):
             log.info("quiet hours; waiting")
     else:
-        process_and_send(cfg, token, owner, review, manifest)
+        process_and_send(cfg, token, owner, review, manifest, state)
+        save_json(STATE, state)
 
     if owner:
+        try:
+            cleanup_owner_chat(cfg, token, owner, state)
+        except Exception:
+            log.exception("cleanup failed")
+        save_json(STATE, state)
         listen_for_approvals(cfg, manifest, state, started)
 
 
-def process_and_send(cfg, token, owner, review, manifest):
+def process_and_send(cfg, token, owner, review, manifest, state):
     """One email at a time: process, send, then commit. A failure rolls back
     only that email, which retries next cycle, so nothing is sent twice."""
     import copy
@@ -673,7 +771,7 @@ def process_and_send(cfg, token, owner, review, manifest):
             group_blocks, group_items, private_blocks, done_files = \
                 process_outbox(cfg, manifest, [path])
             _send(cfg, token, owner, review, manifest,
-                  group_blocks, group_items, private_blocks)
+                  group_blocks, group_items, private_blocks, state)
         except Exception:
             log.exception("failed on %s; will retry next cycle", path.name)
             for p in set(PENDING.glob("*.json")) - before:
@@ -695,10 +793,11 @@ def process_and_send(cfg, token, owner, review, manifest):
         log.exception("calendar failed; will retry next cycle")
 
 
-def _send(cfg, token, owner, review, manifest, group_blocks, group_items, private_blocks):
+def _send(cfg, token, owner, review, manifest, group_blocks, group_items, private_blocks,
+          state):
     if private_blocks and owner:
-        for msg in chunk_blocks(private_blocks, "<b>For you only</b>"):
-            tg_send(token, owner, msg)
+        for msg in chunk_blocks(private_blocks, "🔒 <b>For you only</b>"):
+            send_owner(token, owner, state, msg, "note")
 
     if not group_blocks:
         return
@@ -714,7 +813,7 @@ def _send(cfg, token, owner, review, manifest, group_blocks, group_items, privat
             for i, msg in enumerate(msgs):
                 last = i == len(msgs) - 1
                 label = "<i>Preview, not posted yet</i>\n" if i == 0 else ""
-                tg_send(token, owner, label + msg, buttons=[
+                send_owner(token, owner, state, label + msg, "preview", batch=batch_id, buttons=[
                     {"text": "Post to channel", "callback_data": f"post:{batch_id}"},
                     {"text": "Skip", "callback_data": f"skip:{batch_id}"},
                 ] if last else None)

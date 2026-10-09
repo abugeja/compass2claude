@@ -54,7 +54,7 @@ class PosterTest(unittest.TestCase):
         import compass_post
         self.m = compass_post
         self.m.now = lambda: datetime(2026, 10, 9, 10, 0)
-        self.sent, self.updates = [], []
+        self.sent, self.updates, self.calls, self.next_id = [], [], [], 100
         self.m.tg_call = self._fake
         self.cwd = os.getcwd()
         os.chdir(self.dir)
@@ -69,13 +69,40 @@ class PosterTest(unittest.TestCase):
         (self.dir / "config.ini").write_text(CONFIG.format(review=str(on).lower(), auto=auto))
 
     def _fake(self, token, method, params):
+        self.calls.append((method, params))
         if method == "sendMessage":
             self.sent.append(params)
-        return self.updates if method == "getUpdates" else {"message_id": 1}
+            self.next_id += 1
+            return {"message_id": self.next_id}
+        return self.updates if method == "getUpdates" else True
 
     def drop(self, *items):
         for it in items:
             (self.dir / "outbox" / f"{it['source_id']}.json").write_text(json.dumps(it))
+
+    def deleted(self):
+        out = []
+        for m, p in self.calls:
+            if m == "deleteMessages":
+                out += list(p["message_ids"])
+            elif m == "deleteMessage":
+                out.append(p["message_id"])
+        return out
+
+    def state(self):
+        return json.loads((self.dir / "state.json").read_text())
+
+    def tap(self, action, sid, uid=50):
+        pend = {json.loads(p.read_text())["items"][0]: p.stem
+                for p in (self.dir / "pending").glob("*.json")}
+        msg = next(m["id"] for m in self.state()["owner_msgs"]
+                   if m.get("batch") == pend[sid] and m["kind"] == "preview")
+        self.updates[:] = [{"update_id": uid, "callback_query": {
+            "id": str(uid), "from": {"id": 42}, "data": f"{action}:{pend[sid]}",
+            "message": {"chat": {"id": 42}, "message_id": msg}}}]
+        self.run_once()
+        self.updates[:] = []
+        return msg
 
     def run_once(self):
         sys.argv = ["compass_post.py"]
@@ -273,6 +300,62 @@ class PosterTest(unittest.TestCase):
         self.assertGreater(len(msgs), 1)
         self.assertTrue(all(len(m) <= 4096 for m in msgs))
         self.assertTrue(all(m.count("<blockquote") == m.count("</blockquote>") for m in msgs))
+
+    # ---- cleanup of the owner chat
+
+    def test_decision_collapses_preview_to_one_line(self):
+        self.drop(item("a", subject="Disco helpers", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        msg = self.tap("post", "a")
+        edits = [p for m, p in self.calls if m == "editMessageText"]
+        self.assertEqual(edits[-1]["message_id"], msg)
+        self.assertIn("Posted", edits[-1]["text"])
+        self.assertIn("Disco helpers", edits[-1]["text"])
+        self.assertNotIn("Preview", edits[-1]["text"])
+
+    def test_decided_previews_and_notes_deleted_later_pending_kept(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["one"]}]),
+                  item("b", sections=[{"heading": "FYI", "fyi": ["two"]}]),
+                  item("f", audience="family", private={"actions": [], "dates": [], "note": "Note"}))
+        self.run_once()
+        decided = self.tap("skip", "a")
+        ids = {m["kind"] + (m.get("batch") or ""): m["id"] for m in self.state()["owner_msgs"]}
+        pending_b = [m["id"] for m in self.state()["owner_msgs"]
+                     if m["kind"] == "preview" and m["id"] != decided][0]
+        note = [m["id"] for m in self.state()["owner_msgs"] if m["kind"] == "note"][0]
+        self.calls.clear()
+        self.m.now = lambda: datetime(2026, 10, 9, 15, 0)   # +5h: nothing yet
+        self.run_once()
+        self.assertEqual(self.deleted(), [])
+        self.m.now = lambda: datetime(2026, 10, 9, 17, 0)   # +7h: decided preview goes
+        self.run_once()
+        self.assertIn(decided, self.deleted())
+        self.assertNotIn(note, self.deleted())
+        self.m.now = lambda: datetime(2026, 10, 10, 11, 0)  # +25h: note goes
+        self.run_once()
+        self.assertIn(note, self.deleted())
+        self.assertNotIn(pending_b, self.deleted())        # never while pending
+
+    def test_purge_keeps_pending(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        pending = [m["id"] for m in self.state()["owner_msgs"] if m["kind"] == "preview"][0]
+        self.calls.clear()
+        sys.argv = ["compass_post.py", "--purge"]
+        self.m.main()
+        gone = self.deleted()
+        self.assertNotIn(pending, gone)
+        self.assertIn(pending - 1, gone)
+        self.assertEqual([m["id"] for m in self.state()["owner_msgs"]], [pending])
+
+    def test_cleanup_can_be_disabled(self):
+        with open(self.dir / "config.ini", "a") as f:
+            f.write("[cleanup]\nenabled = false\n")
+        self.drop(item("f", audience="family", private={"actions": [], "dates": [], "note": "N"}))
+        self.run_once()
+        self.m.now = lambda: datetime(2026, 10, 11, 9, 0)
+        self.run_once()
+        self.assertEqual(self.deleted(), [])
 
     # ---- behaviour
 

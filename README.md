@@ -102,6 +102,18 @@ Full walkthrough: [docs/setup.md](docs/setup.md). In short:
 6. In Claude, create a scheduled task that requires this computer, attach this folder, and use the prompt in [docs/scheduled-task.md](docs/scheduled-task.md).
 7. Test with the files in `samples/`.
 
+## Keeping the bot chat tidy
+
+When you tap **Post** or **Skip**, the preview collapses to a single line (for example "✅ Posted · Disco helpers · 11:42"). Each cycle, decided one-liners older than 6 hours and "For you only" notes older than 24 hours are deleted. Previews still waiting for a decision are never touched. Change the limits in `config.ini [cleanup]`.
+
+To clear the whole chat now, except anything awaiting approval:
+
+```
+python compass_post.py --purge
+```
+
+Telegram only lets bots delete their own messages, and only within 48 hours, so your own messages to the bot and anything older stay.
+
 ## Repository layout
 
 | Path | What it is |
