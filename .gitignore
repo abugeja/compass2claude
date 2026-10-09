@@ -27,3 +27,4 @@ venv/
 # Feedback and learnings (personal)
 feedback/
 learnings.md
+claude_run.log

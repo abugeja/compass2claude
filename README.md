@@ -102,6 +102,10 @@ Full walkthrough: [docs/setup.md](docs/setup.md). In short:
 6. In Claude, create a scheduled task that requires this computer, attach this folder, and use the prompt in [docs/scheduled-task.md](docs/scheduled-task.md).
 7. Test with the files in `samples/`.
 
+## Running Claude from a terminal
+
+Prefer Claude Code to a scheduled task? `scripts/run_claude.ps1` (or `.sh`) runs the same reading step headlessly. See [docs/claude-code.md](docs/claude-code.md).
+
 ## Teaching it
 
 Message the bot with what you'd change ("policies in one line", "skip the community page") and the next Claude run folds it into `learnings.md`, which it follows from then on. Reply to a post to say which one you mean. `/learned` shows what it has picked up. Learnings only affect style and coverage, never the privacy rules. Details in [docs/feedback.md](docs/feedback.md).
