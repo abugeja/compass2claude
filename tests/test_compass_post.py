@@ -361,6 +361,55 @@ class PosterTest(unittest.TestCase):
         self.say("Mention Familysurname less")
         self.assertEqual(self.to_channel(), [])
 
+    # ---- reminders
+
+    def test_pending_preview_gets_reminders_then_stops(self):
+        self.drop(item("a", subject="Disco helpers", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        n = len(self.sent)
+        self.m.now = lambda: datetime(2026, 10, 9, 10, 30)       # +30 min: too soon
+        self.run_once()
+        self.assertEqual(len(self.sent), n)
+        self.m.now = lambda: datetime(2026, 10, 9, 11, 5)        # +65 min: first nudge
+        self.run_once()
+        self.assertEqual(len(self.sent), n + 1)
+        self.assertIn("Still waiting", self.sent[-1]["text"])
+        self.assertIn("Disco helpers", self.sent[-1]["text"])
+        self.assertIn("reply_markup", self.sent[-1])
+        self.m.now = lambda: datetime(2026, 10, 9, 12, 0)        # +55 min since: not yet
+        self.run_once()
+        self.assertEqual(len(self.sent), n + 1)
+        self.m.now = lambda: datetime(2026, 10, 9, 14, 10)       # +3h since: again
+        self.run_once()
+        self.assertEqual(len(self.sent), n + 2)
+
+    def test_no_reminders_in_quiet_hours_or_after_decision(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        n = len(self.sent)
+        self.m.now = lambda: datetime(2026, 10, 9, 22, 0)
+        self.run_once()
+        self.assertEqual(len(self.sent), n)
+        self.m.now = lambda: datetime(2026, 10, 10, 8, 0)
+        self.run_once()
+        self.assertEqual(len(self.sent), n + 1)
+        self.tap("post", "a")
+        count = len(self.sent)
+        self.m.now = lambda: datetime(2026, 10, 10, 15, 0)
+        self.run_once()
+        self.assertEqual(len(self.sent), count)
+
+    def test_deciding_clears_the_preview_and_its_reminders(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        self.m.now = lambda: datetime(2026, 10, 9, 11, 5)
+        self.run_once()
+        msgs = [m["id"] for m in self.state()["owner_msgs"] if m["kind"] == "preview"]
+        self.assertEqual(len(msgs), 2)
+        tapped = self.tap("post", "a")
+        self.assertEqual(len(self.to_channel()), 1)
+        self.assertEqual(set(msgs) - {tapped}, set(self.deleted()))
+
     # ---- cleanup of the owner chat
 
     def test_decision_collapses_preview_to_one_line(self):

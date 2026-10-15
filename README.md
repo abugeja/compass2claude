@@ -110,6 +110,10 @@ Prefer Claude Code to a scheduled task? `scripts/run_claude.ps1` (or `.sh`) runs
 
 Message the bot with what you'd change ("policies in one line", "skip the community page") and the next Claude run folds it into `learnings.md`, which it follows from then on. Reply to a post to say which one you mean. `/learned` shows what it has picked up. Learnings only affect style and coverage, never the privacy rules. Details in [docs/feedback.md](docs/feedback.md).
 
+## Reminders
+
+A preview you haven't answered isn't forgotten. After an hour the bot sends a fresh, notifying reminder with the same **Post** and **Skip** buttons, then again every 3 hours (up to 8 times), but not between 9pm and 7am. Tapping any copy decides it and clears the rest. Change the timings in `config.ini [reminders]`.
+
 ## Keeping the bot chat tidy
 
 When you tap **Post** or **Skip**, the preview collapses to a single line (for example "✅ Posted · Disco helpers · 11:42"). Each cycle, decided one-liners older than 6 hours and "For you only" notes older than 24 hours are deleted. Previews still waiting for a decision are never touched. Change the limits in `config.ini [cleanup]`.

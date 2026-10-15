@@ -606,14 +606,53 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
 
 # ---------------------------------------------------------------- processing
 
-def in_quiet_hours(cfg):
-    spec = cfg.get("group", "quiet_hours", fallback="20-7")
+def in_quiet_hours(cfg, section="group", default="20-7"):
+    spec = cfg.get(section, "quiet_hours", fallback=default)
     try:
         start, end = (int(x) for x in spec.split("-"))
     except ValueError:
         return False
     h = now().hour
     return h >= start or h < end if start > end else start <= h < end
+
+
+def remind_pending(cfg, token, owner, manifest, state):
+    """Nudge the owner about previews still waiting for a decision. Each
+    reminder is a fresh, notifying message with the same buttons."""
+    if not cfg.getboolean("reminders", "enabled", fallback=True):
+        return
+    if in_quiet_hours(cfg, "reminders", "21-7"):
+        return
+    first = cfg.getfloat("reminders", "first_after_minutes", fallback=60) * 60
+    repeat = cfg.getfloat("reminders", "repeat_minutes", fallback=180) * 60
+    limit = cfg.getint("reminders", "max_reminders", fallback=8)
+    t = now()
+    for pfile in sorted(PENDING.glob("*.json")):
+        batch = load_json(pfile, {})
+        created = batch.get("created")
+        if not created:
+            continue
+        age = (t - datetime.fromisoformat(created)).total_seconds()
+        sent = batch.get("reminders", 0)
+        last = batch.get("last_reminded")
+        since = (t - datetime.fromisoformat(last)).total_seconds() if last else age
+        if sent >= limit or age < first or (last and since < repeat):
+            continue
+        subj = ", ".join(manifest["processed"].get(i, {}).get("subject") or i
+                         for i in batch.get("items", []))
+        hours = age / 3600
+        waited = f"{int(age // 60)} min" if hours < 1.5 else f"{hours:.0f} hours"
+        batch_id = pfile.stem
+        send_owner(token, owner, state,
+                   f"⏰ <b>Still waiting for you</b>\n{esc(subj)}\n"
+                   f"<i>Preview sent {waited} ago. Nothing has been posted.</i>",
+                   "preview", batch=batch_id, buttons=[
+                       {"text": "Post to channel", "callback_data": f"post:{batch_id}"},
+                       {"text": "Skip", "callback_data": f"skip:{batch_id}"}])
+        batch["reminders"] = sent + 1
+        batch["last_reminded"] = stamp()
+        save_json(pfile, batch)
+        log.info("reminded about %s (#%d)", batch_id, sent + 1)
 
 
 def process_outbox(cfg, manifest, paths):
@@ -820,6 +859,10 @@ def run(cfg, token):
         save_json(STATE, state)
 
     if owner:
+        try:
+            remind_pending(cfg, token, owner, manifest, state)
+        except Exception:
+            log.exception("reminders failed")
         try:
             cleanup_owner_chat(cfg, token, owner, state)
         except Exception:

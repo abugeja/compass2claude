@@ -17,6 +17,7 @@ Check `compass_post.log` first.
 | Old messages in the bot chat | Over 48 hours old, or sent by you, so the bot can't delete them | Delete them by hand. Newer ones clear automatically, or run `--purge` |
 | Feedback not acknowledged | Poster only reads messages each cycle, or the message came from another account | Wait up to 10 minutes. Only `private_chat_id` is accepted |
 | Feedback not being applied | Claude run hasn't happened since, or `learnings.md` isn't readable in the task's folder | Check `last_feedback_id` in `learnings.md` and the run's summary for a "Learned:" line |
+| Reminders keep coming | A preview is still waiting for Post or Skip | Tap either button on any copy. Turn off with `[reminders] enabled = false` |
 | Same post twice | Shouldn't happen. Each email is committed only after its sends succeed | Check the log around that time and open an issue |
 
 ## Re-running an email
