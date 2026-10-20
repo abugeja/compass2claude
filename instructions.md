@@ -12,7 +12,7 @@ Never put any of the following in `actions`, `dates`, `sections` or `public_link
 
 - Anything about our child, our family, or any other individual child, student or family.
 - The name of **any child**, whether or not it is ours. Don't name students even in good news ("Student of the week: …").
-- Staff or parent email addresses, phone numbers, or personal names in a contact context ("email Mr X at …"). Write "reply via the Compass message" instead.
+- Staff or parent email addresses and phone numbers. Write "reply via the Compass message" instead. Staff names are fine (sender, sign-off, "contact Ms X"); parent names are not.
 - Attendance, absences, reports, assessment results, behaviour, incidents, injuries, health, medication, allergies, wellbeing, learning support, fees or money owed, interview bookings, or anything else from one child's record.
 - **Compass links of any kind.** They contain the parent's personal login token. Only the domains listed under "Allowed links" in `school.md` may be used.
 - Greetings or wording addressed to us personally ("Dear Mrs Smith", "your child").
@@ -76,7 +76,7 @@ A newsletter is `school` even if a few items in it are for other year levels. Ju
   "kind": "newsletter | news | message | reminder",
   "subject": "<email subject, without the 'News: ' prefix>",
   "re_line": "<the email's 'Re: …' line copied exactly, or null if it has none>",
-  "from": "<school short name from school.md>",
+  "from": "<who sent it: role plus staff names as signed, e.g. \"Prep teachers (Caitlin, Claire, Georgia)\"; school short name from school.md if unsigned>",
   "received": "YYYY-MM-DDTHH:MM",
   "audience": "school | prep | class | family | other",
   "actions": [
@@ -101,6 +101,8 @@ A newsletter is `school` even if a few items in it are for other year levels. Ju
 Times are local school time with no offset. `received` is the email's date and time in local time. Use `"start": "YYYY-MM-DDTHH:MM"` and `"all_day": false` for timed events. For multi-day ranges, give `end` as the last date. Use `null` for any field you don't have. Never leave out `text` or `title`.
 
 ### Field rules
+
+- **from**: shown as the post's From line. Use the sign-off: role plus staff names exactly as signed, such as "Prep teachers (Caitlin, Claire, Georgia)" or "Principal, Ms X". Never a parent or student name. If unsigned, use the school short name.
 
 - **re_line**: copy the `Re: …` line from the top of the email body exactly as written, or null if there isn't one. The script checks it independently. If it names a student, nothing from the email reaches the group, whatever audience you chose.
 
@@ -140,7 +142,7 @@ Parents skim these posts on a phone, often in a hurry. Every line has to make se
 2. **What to bring, wear or pack is an action**, `required`, due on the day (start of school if no time is given). It is not an FYI.
 3. **Make dates absolute.** "Tomorrow" becomes the actual day and date. Work it out from `received`.
 4. **Say each fact once.** If it's in `actions` or `dates`, it isn't also in `sections`. The subject is already in the header, so don't restate it as a bullet.
-5. **Leave out the filler:** greetings, "we hope you enjoyed", sign-offs, staff first names, "contact your teacher with any questions", "we look forward to…", and anything every parent already knows.
+5. **Leave out the filler:** greetings, "we hope you enjoyed", sign-offs, staff names inside bullets (the sender goes in `from`), "contact your teacher with any questions", "we look forward to…", and anything every parent already knows.
 6. **Be specific.** "Pay $25 for the excursion on Compass by Fri 16 Oct" beats "Payment needed for the excursion".
 7. **Don't soften or add.** Keep the school's facts exact (times, amounts, items). Don't invent detail, and don't add advice.
 

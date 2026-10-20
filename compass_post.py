@@ -344,10 +344,9 @@ def render_header(item, audience_label=None, tag=True):
     if tag:
         lines.append(f"<b>{KIND_TAG.get(item.get('kind'), '📌 UPDATE')}</b>")
     lines.append(f"📬 <b>Subject:</b> {esc(item.get('subject'))}")
+    lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if audience_label:
         lines.append(f"👥 <b>To:</b> {esc(audience_label)}")
-    else:
-        lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if when:
         lines.append(f"🕒 <b>Date:</b> {when}")
     return "\n".join(lines)
