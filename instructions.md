@@ -106,7 +106,7 @@ Times are local school time with no offset. `received` is the email's date and t
 
 - **re_line**: copy the `Re: …` line from the top of the email body exactly as written, or null if there isn't one. The script checks it independently. If it names a student, nothing from the email reaches the group, whatever audience you chose.
 
-- **actions**: things a family in our year level needs to do. `level` is `required` for payment, consent or forms, and `optional` for tickets, volunteering or donations. Include `due` whenever there's a deadline. One action per line, starting with a verb.
+- **actions**: things a family in our year level needs to do. `level` is `required` when not doing it leaves the child missing out or caught short: paying, consent, forms, and what to bring, wear or pack. `optional` is for tickets, volunteering, donations, auctions and social events. Include `due` whenever there's a deadline. One action per line, starting with a verb.
 - **dates** are only what a family in our year level would attend or plan around:
   - `no_school`: curriculum days, public holidays, student-free days.
   - `routine_change`: early finishes, changed drop-off or pickup, gate changes.
@@ -132,6 +132,21 @@ Give an overview of every page you read, so a parent who reads only the post sti
 - Pages in the skip list from `school.md` get no section.
 - Dates and actions that appear in several pages go in `dates` and `actions` once.
 
+## What a parent needs to see
+
+Write every post as if you were a parent in our year level reading it on a phone at pickup. They want to know, in this order:
+
+1. **Do I have to do something, and by when?** Pay, sign, reply, or send something in. Put the deadline on it.
+2. **Does my child need anything on the day?** What to bring, wear or pack, and what not to bring. This is a `required` action due that morning.
+3. **Does our routine change?** No school, early finish, changed drop-off, pickup or gate. Give the exact day and time.
+4. **When and where is it?** The event with its day, start and finish times, and place.
+5. **Who is it from and who is it for?** The `from` line and the audience cover this. Get them right.
+6. **Anything else useful.** Only then the FYI, and only if a parent would act on it or be glad to know.
+
+If a parent would read the post and still have to open Compass to find out what to do, the post has failed. If a line wouldn't change what a parent does or expects, leave it out.
+
+**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, carry them over from the earlier post on the same event (its `group_text` in `manifest.json`). Don't invent anything that wasn't in either.
+
 ## Writing each item
 
 Parents skim these posts on a phone, often in a hurry. Every line has to make sense on its own, with no other line needed to explain it.
@@ -148,7 +163,7 @@ Parents skim these posts on a phone, often in a hurry. Every line has to make se
 
 **Picking `kind`:** `reminder` for anything that reminds families about an upcoming event, even when it's written as a class message. `message` for other teacher messages. `news` for "News:" items. `newsletter` for the newsletter.
 
-**An event that was already posted** (an excursion reminder the day before, say) still gets its date in `dates`. The script drops repeats, so put anything new for that day in `actions` (what to bring) or the date's `note` (changed time or place). If nothing is new, an empty file is fine.
+**An event that was already posted** still gets its date in `dates`. The script shows it again when the event is within the next two days (the day-before reminder), and drops it as a repeat when it's further off. For a further-off repeat, put anything new in `actions` or the date's `note` (changed time or place). If nothing is new, an empty file is fine.
 
 ### Example
 
@@ -163,12 +178,15 @@ Bad (contradicts itself, restates the subject, adds filler):
 Good:
 - `kind`: `reminder`
 - `actions`: "Send a small bag with lunchbox, water bottle and hat, not the school bag", `required`, due the excursion day at 8:45am
-- `dates`: the aquarium excursion on that date
+- `from`: "Prep teachers (Caitlin, Claire, Georgia)"
+- `dates`: "Prep aquarium excursion" on that date, `attend`, with note "Leaves 10:45am, back about 2:45pm" carried over from the earlier excursion post
 - `sections`: empty
 
 ### Check before you write the file
 
-Reread every line as a parent who sees only that line:
+Reread the post as a parent who sees only this post: do they know what to do, what to send, and when to be where, without opening Compass?
+
+Then reread every line as a parent who sees only that line:
 - Does it make sense alone, without contradicting another line?
 - Is it a task, a date, or genuinely useful information, rather than filler?
 - Is anything said twice?

@@ -477,6 +477,37 @@ class PosterTest(unittest.TestCase):
         self.run_once()
         self.assertEqual(len(self.to_channel()), 1)
 
+    def test_repeat_date_dropped_when_far_off(self):
+        ev = {"title": "Excursion", "start": "2026-10-21", "all_day": True, "kind": "attend"}
+        self.review(False)
+        self.drop(item("a", audience="prep", dates=[ev]))
+        self.run_once()
+        self.drop(item("b", audience="prep", dates=[ev]))
+        self.run_once()
+        self.assertEqual(len(self.to_channel()), 1)
+
+    def test_repeat_date_shown_again_when_within_two_days(self):
+        ev = {"title": "Excursion", "start": "2026-10-10", "all_day": True, "kind": "attend"}
+        self.review(False)
+        self.drop(item("a", audience="prep", dates=[ev]))
+        self.run_once()
+        self.drop(item("b", audience="prep", dates=[ev]))
+        self.run_once()
+        posts = self.to_channel()
+        self.assertEqual(len(posts), 2)
+        self.assertIn("Excursion", posts[1])
+        keys = json.loads((self.dir / "manifest.json").read_text())["group_keys"]
+        self.assertEqual(keys.count("d|2026-10-10|excursion"), 1)
+
+    def test_header_shows_from_and_to(self):
+        self.review(False)
+        self.drop(item("a", audience="prep", **{"from": "Prep teachers (A, B)"},
+                       sections=[{"heading": "FYI", "fyi": ["Hats on"]}]))
+        self.run_once()
+        post = self.to_channel()[0]
+        self.assertIn("From:</b> Prep teachers (A, B)", post)
+        self.assertIn("To:</b>", post)
+
     def test_null_fields_do_not_crash(self):
         self.drop(item("a", actions=[{"text": "Volunteer", "due": None, "level": "optional"}],
                        sections=[{"heading": None, "fyi": [None, "ok"]}]))
