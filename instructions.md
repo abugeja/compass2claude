@@ -145,12 +145,15 @@ Write every post as if you were a parent in our year level reading it on a phone
 
 If a parent would read the post and still have to open Compass to find out what to do, the post has failed. If a line wouldn't change what a parent does or expects, leave it out.
 
-**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, you may bring them in from the earlier email on the same event (its `group_text` in `manifest.json`), with these rules:
+**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, you may bring them in from an earlier email on the same event. Follow every step:
 
-- **Keep this email's content and earlier content apart.** `actions`, `dates` and their notes hold only what this email says. Never blend an earlier email's details into this email's lines.
-- **Put earlier details in their own section**, headed `Earlier: <that email's subject> (<Day D Mon>)`, for example `Earlier: Melbourne Aquarium Excursion (Mon 12 Oct)`. One section per earlier email, after this email's own content.
-- **Keep the original context.** Bring only the details a parent needs for this event (times, place, what to bring, cost), worded as that email had them. Don't update, reinterpret or merge them with this email. If this email changes something, this email's version goes in `actions` or `dates`, and the earlier line says what it originally said.
-- Don't invent anything that wasn't in either email.
+1. **Find the source.** Look up the event in `manifest.json` (`processed`, matched by subject and date), then open that earlier email in Gmail with get_thread (PLAIN_TEXT) and read it in full. Never carry over details from memory or from `group_text` alone. If you can't open it, carry nothing over.
+2. **Check nothing has superseded it.** Search Gmail for every school email about the same event from the earlier email's date up to now (`from:<sender> <event keywords> after:YYYY/MM/DD`) and read them. The newest statement of each detail wins. If this email or any later one changes a time, place, item or cost, use the newest version and drop the old one. Never show two versions of the same detail. If two emails conflict and you can't tell which is current, carry neither, and put the conflict in `private.note`.
+3. **Drop what's no longer relevant.** Bring over only what a parent still needs for the event itself: times, place, what to bring or wear, cost if still to pay. Leave out deadlines already passed, calls for helpers or volunteers that have closed or only made sense earlier (e.g. "contact the teacher ASAP to help" the day before), and anything already done. When in doubt, leave it out.
+4. **Keep it apart and in context.** This email's own lines (`actions`, `dates`, their notes) hold only what this email says. Earlier details go in their own section, one per earlier email, after this email's content, headed:
+   `From email dated <Day D Mon> – <subject> – <sender as signed>`
+   for example `From email dated Mon 12 Oct – Melbourne Aquarium Excursion – Prep team (Caitlin, Georgia, Claire)`. Word each detail as that email had it, without reinterpreting it.
+5. Don't invent anything that wasn't in one of the emails.
 
 ## Writing each item
 
@@ -185,11 +188,13 @@ Good:
 - `actions`: "Send a small bag with lunchbox, water bottle and hat, not the school bag", `required`, due the excursion day at 8:45am
 - `from`: "Prep teachers (Caitlin, Claire, Georgia)"
 - `dates`: "Prep aquarium excursion" on that date, `attend`, no note (this email gives no times)
-- `sections`: one section headed "Earlier: Melbourne Aquarium Excursion (Mon 12 Oct)" with "Leaves school 10:45am, back about 2:45pm"
+- `sections`: one section headed "From email dated Mon 12 Oct – Melbourne Aquarium Excursion – Prep team (Caitlin, Georgia, Claire)" with "Leaves school 10:45am, back about 2:45pm". Its call for parent helpers is left out: the day before, it no longer applies.
 
 ### Check before you write the file
 
 Reread the post as a parent who sees only this post: do they know what to do, what to send, and when to be where, without opening Compass?
+
+If the post uses an earlier email: is every detail still current, with nothing contradicting this email, nothing past its date, and the source dated and named?
 
 Then reread every line as a parent who sees only that line:
 - Does it make sense alone, without contradicting another line?
