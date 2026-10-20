@@ -145,7 +145,12 @@ Write every post as if you were a parent in our year level reading it on a phone
 
 If a parent would read the post and still have to open Compass to find out what to do, the post has failed. If a line wouldn't change what a parent does or expects, leave it out.
 
-**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, carry them over from the earlier post on the same event (its `group_text` in `manifest.json`). Don't invent anything that wasn't in either.
+**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, you may bring them in from the earlier email on the same event (its `group_text` in `manifest.json`), with these rules:
+
+- **Keep this email's content and earlier content apart.** `actions`, `dates` and their notes hold only what this email says. Never blend an earlier email's details into this email's lines.
+- **Put earlier details in their own section**, headed `Earlier: <that email's subject> (<Day D Mon>)`, for example `Earlier: Melbourne Aquarium Excursion (Mon 12 Oct)`. One section per earlier email, after this email's own content.
+- **Keep the original context.** Bring only the details a parent needs for this event (times, place, what to bring, cost), worded as that email had them. Don't update, reinterpret or merge them with this email. If this email changes something, this email's version goes in `actions` or `dates`, and the earlier line says what it originally said.
+- Don't invent anything that wasn't in either email.
 
 ## Writing each item
 
@@ -179,8 +184,8 @@ Good:
 - `kind`: `reminder`
 - `actions`: "Send a small bag with lunchbox, water bottle and hat, not the school bag", `required`, due the excursion day at 8:45am
 - `from`: "Prep teachers (Caitlin, Claire, Georgia)"
-- `dates`: "Prep aquarium excursion" on that date, `attend`, with note "Leaves 10:45am, back about 2:45pm" carried over from the earlier excursion post
-- `sections`: empty
+- `dates`: "Prep aquarium excursion" on that date, `attend`, no note (this email gives no times)
+- `sections`: one section headed "Earlier: Melbourne Aquarium Excursion (Mon 12 Oct)" with "Leaves school 10:45am, back about 2:45pm"
 
 ### Check before you write the file
 
