@@ -130,9 +130,53 @@ Give an overview of every page you read, so a parent who reads only the post sti
 - Pages in the skip list from `school.md` get no section.
 - Dates and actions that appear in several pages go in `dates` and `actions` once.
 
+## Writing each item
+
+Parents skim these posts on a phone, often in a hurry. Every line has to make sense on its own, with no other line needed to explain it.
+
+**Turn the email into what a parent does.** Read the whole email first, then ask: what changes for us, what do we do, and by when? Write that, not a line-by-line summary of the email.
+
+1. **One task, one line.** When the email says to do something and also what not to do, merge them: "Send a small bag with lunchbox, water bottle and hat, not the school bag". Never split an instruction and its exception into separate bullets, because read apart they contradict each other.
+2. **What to bring, wear or pack is an action**, `required`, due on the day (start of school if no time is given). It is not an FYI.
+3. **Make dates absolute.** "Tomorrow" becomes the actual day and date. Work it out from `received`.
+4. **Say each fact once.** If it's in `actions` or `dates`, it isn't also in `sections`. The subject is already in the header, so don't restate it as a bullet.
+5. **Leave out the filler:** greetings, "we hope you enjoyed", sign-offs, staff first names, "contact your teacher with any questions", "we look forward to…", and anything every parent already knows.
+6. **Be specific.** "Pay $25 for the excursion on Compass by Fri 16 Oct" beats "Payment needed for the excursion".
+7. **Don't soften or add.** Keep the school's facts exact (times, amounts, items). Don't invent detail, and don't add advice.
+
+**Picking `kind`:** `reminder` for anything that reminds families about an upcoming event, even when it's written as a class message. `message` for other teacher messages. `news` for "News:" items. `newsletter` for the newsletter.
+
+**An event that was already posted** (an excursion reminder the day before, say) still gets its date in `dates`. The script drops repeats, so put anything new for that day in `actions` (what to bring) or the date's `note` (changed time or place). If nothing is new, an empty file is fine.
+
+### Example
+
+Email: "Prep students are heading to the aquarium tomorrow! Please send a small bag with their lunchbox, water bottle and hat. There is no need to bring a school bag or book bag. If you have any last-minute questions, please reach out to your child's classroom teacher."
+
+Bad (contradicts itself, restates the subject, adds filler):
+- Prep aquarium excursion is tomorrow
+- Pack a small bag with lunchbox, water bottle and hat
+- No school bag or book bag needed tomorrow
+- Last-minute questions: contact your classroom teacher
+
+Good:
+- `kind`: `reminder`
+- `actions`: "Send a small bag with lunchbox, water bottle and hat, not the school bag", `required`, due the excursion day at 8:45am
+- `dates`: the aquarium excursion on that date
+- `sections`: empty
+
+### Check before you write the file
+
+Reread every line as a parent who sees only that line:
+- Does it make sense alone, without contradicting another line?
+- Is it a task, a date, or genuinely useful information, rather than filler?
+- Is anything said twice?
+- Are all dates absolute?
+
+Fix anything that fails, then write the file.
+
 ## Style
 
-Short and factual, because every line is shown in a compact quote block. Say what, when, who, what to do and by when. No intros, sign-offs, filler or emoji, since the script adds the traffic lights. Plain English, using the spelling of `school.md`'s locale.
+Short and factual, because every line is shown in a compact quote block. One line per item, about 12 words or fewer, starting with a verb for actions. No intros, sign-offs, filler or emoji, since the script adds the traffic lights. Plain English, using the spelling of `school.md`'s locale.
 
 ## Finish
 
