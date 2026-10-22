@@ -19,7 +19,7 @@ The channel is read by other parents. One leaked line about a child can't be tak
 | 2 | Audience allowlist | `compass_post.py`, `config.ini [group] audiences` | Family, other-year and uncertain emails |
 | 3 | Separate `private` field | outbox schema, renderer | Family content can't be rendered into a channel post |
 | 4 | Blocked words | `private_terms.txt` | Your names, nicknames, IDs, other children's names |
-| 5 | Pattern scan | `compass_post.py` (`PATTERNS`) | Email addresses, AU phone numbers, Compass links and tokens, student codes, "your child", "Dear Mr/Mrs", personal-record topics |
+| 5 | Pattern scan | `compass_post.py` (`PATTERNS`) | Email addresses, AU phone numbers, Compass links and tokens, student codes, "your child", "Dear Mr/Mrs", personal-record topics. Topic words alone (such as "medical" in a school-wide health notice) force a manual review instead of withholding, and are withheld if no owner chat is set |
 | 6 | Link allowlist | `config.ini [group] link_allowlist` | Any link off approved domains |
 | 7 | Owner approval | Telegram buttons, `review = true` | Anything that looks fine to a machine but not to you |
 | 8 | Audit trail | `manifest.json` | After-the-fact review of every post and every withheld item |

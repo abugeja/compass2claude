@@ -19,6 +19,8 @@ Never put any of the following in `actions`, `dates`, `sections` or `public_link
 
 **Emails about one student are always `family`.** Compass marks these with a line near the top like `Re: Firstname SURNAME (ABC1234), 0X at <school>`, which has a student's name in capitals and a student code in brackets. Whenever you see that, set the audience to `family`, with no exceptions, even if the content looks general. Event and class emails use different lines (`Re: Event - …`, `Re: Class - …`) and are judged on their content.
 
+**General notices are not personal.** A message to all families about an illness going around the school (chickenpox, gastro, head lice), a health or safety reminder, or a policy is `school`, as long as it doesn't identify a child, class or family. Write the actions in general terms ("Keep children with chickenpox home until blisters crust over"). The script will flag health words for the owner to check, which is expected.
+
 **When in doubt, the email is `family`.** A missing group post costs nothing. A leaked one can't be undone.
 
 The local script enforces this independently. It checks a private blocked-words list, scans for emails, phone numbers, Compass links and personal-record topics, and only posts the allowed audiences. The owner also approves every post. None of that is a reason to be less careful here.

@@ -242,16 +242,20 @@ PATTERNS = [
     (STUDENT_CODE, "a Compass student code"),
     (STUDENT_NAME, "a student name in Compass format"),
     (re.compile(r"\bDear\s+(?:Mr|Mrs|Ms|Miss|Dr)\b", re.I), "a personal greeting"),
-    (re.compile(r"\b(?:absent|absence|attendance|report card|incident|injur|medical|"
+    (TOPIC_RE := re.compile(r"\b(?:absent|absence|attendance|report card|incident|injur|medical|"
                 r"medication|allerg|behaviour|wellbeing referral|invoice|overdue|"
                 r"outstanding (?:balance|amount))", re.I), "a personal-record topic"),
 ]
+# Topic words are often fine in whole-school notices ("seek medical advice").
+# On their own they don't block a post; they force a manual review instead.
+SOFT_REASONS = {"contains a personal-record topic"}
 
 URL_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
 
 
 def guard(text, terms, link_allow):
-    """Return a list of reasons this text must not go to the group."""
+    """Return a list of reasons this text must not go to the group.
+    Only reasons in SOFT_REASONS may be overridden by the owner."""
     reasons = []
     low = text.lower()
     for t in terms:
@@ -708,9 +712,14 @@ def process_outbox(cfg, manifest, paths):
             else:
                 block = render_group_block(item, actions, dates)
                 reasons = guard(html.unescape(block), terms, link_allow)
-                if reasons:
+                hard = [r for r in reasons if r not in SOFT_REASONS]
+                if hard:
                     withheld = "; ".join(reasons)
                 else:
+                    if reasons:
+                        words = sorted({m.group(0).lower() for m in
+                                        TOPIC_RE.finditer(html.unescape(block))})
+                        rec["_review"] = ", ".join(words) or "a sensitive topic"
                     group_blocks.append(block)
                     group_items.append(sid)
                     rec["group_text"] = block
@@ -917,13 +926,25 @@ def _send(cfg, token, owner, review, manifest, group_blocks, group_items, privat
     for block, sid in zip(group_blocks, group_items):
         msgs = chunk_blocks(manifest["processed"][sid].pop("_parts", None) or [block])
         kind = manifest["processed"][sid].get("kind")
-        if review and kind not in auto_kinds:
+        flagged = manifest["processed"][sid].pop("_review", None)
+        if flagged:
+            manifest["processed"][sid]["review_reason"] = flagged
+            if not owner:
+                manifest["processed"][sid]["group_status"] = "withheld"
+                manifest["processed"][sid]["withheld_reason"] = f"needs review ({flagged})"
+                continue
+        if (review and kind not in auto_kinds) or (flagged and owner):
             batch_id = uuid.uuid4().hex[:12]
             save_json(PENDING / f"{batch_id}.json",
                       {"items": [sid], "messages": msgs, "created": stamp()})
             for i, msg in enumerate(msgs):
                 last = i == len(msgs) - 1
-                label = "<i>Preview, not posted yet</i>\n" if i == 0 else ""
+                label = ""
+                if i == 0:
+                    label = "<i>Preview, not posted yet</i>\n"
+                    if flagged:
+                        label = (f"⚠️ <b>Check before posting.</b> It mentions: {esc(flagged)}. "
+                                 f"Fine for a general notice, not if it's about one child.\n")
                 send_owner(token, owner, state, label + msg, "preview", batch=batch_id, buttons=[
                     {"text": "Post to channel", "callback_data": f"post:{batch_id}"},
                     {"text": "Skip", "callback_data": f"skip:{batch_id}"},

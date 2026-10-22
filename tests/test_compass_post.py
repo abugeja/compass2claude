@@ -142,10 +142,34 @@ class PosterTest(unittest.TestCase):
         self.run_once()
         self.assertIn("phone number", self.manifest()["a"]["withheld_reason"])
 
-    def test_personal_record_topic_withheld(self):
-        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["Absence recorded today"]}]))
+    def test_topic_word_forces_review_even_when_auto_posting(self):
+        self.review(False)
+        self.drop(item("a", kind="message", actions=[
+            {"text": "Seek medical advice if symptoms appear", "level": "required"}]))
         self.run_once()
-        self.assertIn("personal-record", self.manifest()["a"]["withheld_reason"])
+        self.assertEqual(self.to_channel(), [])
+        prev = self.previews()[0]["text"]
+        self.assertIn("Check before posting", prev)
+        self.assertIn("medical", prev)
+        self.assertEqual(self.manifest()["a"]["group_status"], "awaiting_approval")
+        self.tap("post", "a")
+        self.assertEqual(len(self.to_channel()), 1)
+        self.assertNotIn("Check before posting", self.to_channel()[0])
+
+    def test_topic_word_plus_hard_reason_still_withheld(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["ChildName absent today"]}]))
+        self.run_once()
+        self.assertEqual(self.previews(), [])
+        self.assertIn("blocked word", self.manifest()["a"]["withheld_reason"])
+
+    def test_topic_word_without_owner_is_withheld(self):
+        self.review(False)
+        cfg = (self.dir / "config.ini").read_text().replace("private_chat_id = 42", "private_chat_id =")
+        (self.dir / "config.ini").write_text(cfg)
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["Absence policy reminder"]}]))
+        self.run_once()
+        self.assertEqual(self.to_channel(), [])
+        self.assertIn("needs review", self.manifest()["a"]["withheld_reason"])
 
     def test_link_not_on_allowlist_withheld(self):
         self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}],
