@@ -357,10 +357,9 @@ def render_header(item, audience_label=None, tag=True):
     if tag:
         lines.append(f"<b>{KIND_TAG.get(item.get('kind'), '📌 UPDATE')}</b>")
     lines.append(f"📬 <b>Subject:</b> {esc(item.get('subject'))}")
+    lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if audience_label:
         lines.append(f"👥 <b>To:</b> {esc(audience_label)}")
-    else:
-        lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if when:
         lines.append(f"🕒 <b>Date:</b> {when}")
     return "\n".join(lines)
@@ -423,6 +422,20 @@ def norm(s):
 
 def event_key(ev):
     return f"{(ev.get('start') or '')[:10]}|{norm(ev.get('title'))}"
+
+
+def is_soon(ev, days):
+    """True when an event starts today or within the next `days` days. A
+    parent wants the event shown again on the day-before reminder, even if it
+    was posted weeks earlier."""
+    if days <= 0:
+        return False
+    try:
+        start = datetime.fromisoformat((ev.get("start") or "")[:10]).date()
+    except ValueError:
+        return False
+    today = now().date()
+    return today <= start <= today + timedelta(days=days)
 
 
 def action_key(a):
@@ -850,8 +863,10 @@ def process_outbox(cfg, manifest, paths):
             # Group eligibility, decided in code.
             actions = [a for a in item.get("actions") or []
                        if action_key(a) not in posted_keys]
+            soon_days = cfg.getint("group", "repeat_dates_within_days", fallback=2)
             dates = [d for d in item.get("dates") or []
-                     if f"d|{event_key(d)}" not in posted_keys]
+                     if f"d|{event_key(d)}" not in posted_keys
+                     or is_soon(d, soon_days)]
             has_fyi = any(s.get("fyi") for s in item.get("sections") or [])
             withheld = None
             if names_a_student(item.get("re_line")) or names_a_student(item.get("subject")):
@@ -878,7 +893,8 @@ def process_outbox(cfg, manifest, paths):
                     for a in actions:
                         posted_keys.append(action_key(a))
                     for d in dates:
-                        posted_keys.append(f"d|{event_key(d)}")
+                        if f"d|{event_key(d)}" not in posted_keys:
+                            posted_keys.append(f"d|{event_key(d)}")
 
             if withheld:
                 rec["group_status"] = "withheld"
