@@ -1,0 +1,20 @@
+name = "compass2claude-approvals"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+TZ_NAME = "Australia/Melbourne"
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[observability]
+enabled = true
+
+# Secrets are not stored here. Set each one with:
+#   npx wrangler secret put BOT_TOKEN
+#   npx wrangler secret put OWNER_ID
+#   npx wrangler secret put CHANNEL_ID
+#   npx wrangler secret put API_SECRET

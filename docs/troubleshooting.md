@@ -8,6 +8,8 @@ Check `compass_post.log` first.
 | Claude run finishes in seconds with nothing written | As above, or the computer was asleep or the app closed | Keep the desktop app open and the computer awake at run times |
 | Files sit in `outbox/` | Poster not scheduled, quiet hours, or `private_chat_id` empty while `review = true` | Check Task Scheduler and the log. Fill in `private_chat_id` |
 | Buttons do nothing | Poster not running, so taps are only read on the next cycle | Run `python compass_post.py`. While posts await approval it listens for up to `listen_seconds` |
+| Buttons do nothing (Worker in use) | Webhook not set, or the Worker's secrets are missing | Run `python compass_post.py --set-webhook`. Check the four secrets in [worker.md](worker.md) |
+| Log shows `getUpdates` error 409 | Telegram is pointed at the Worker but `[worker]` is not in `config.ini` | Fill in `[worker]`, or run `--delete-webhook` |
 | Button says "Not allowed" | Tapped from a different Telegram account | Only `private_chat_id` can approve |
 | `Telegram sendMessage error: chat not found` | Wrong `channel_id`, or bot not a channel admin | Rerun `--whoami`, and make the bot an admin with post rights |
 | Something was withheld unexpectedly | A blocked word or pattern matched (see the private note) | Check `withheld_reason` in `manifest.json`. If it's a false positive, post it by hand or adjust `private_terms.txt` |

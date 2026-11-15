@@ -12,12 +12,16 @@ Never put any of the following in `actions`, `dates`, `sections` or `public_link
 
 - Anything about our child, our family, or any other individual child, student or family.
 - The name of **any child**, whether or not it is ours. Don't name students even in good news ("Student of the week: …").
-- Staff or parent email addresses and phone numbers. Write "reply via the Compass message" instead. Staff names are fine (sender, sign-off, "contact Ms X"); parent names are not.
+- Staff or parent email addresses, phone numbers, or personal names in a contact context ("email Mr X at …"). Write "reply via the Compass message" instead.
 - Attendance, absences, reports, assessment results, behaviour, incidents, injuries, health, medication, allergies, wellbeing, learning support, fees or money owed, interview bookings, or anything else from one child's record.
 - **Compass links of any kind.** They contain the parent's personal login token. Only the domains listed under "Allowed links" in `school.md` may be used.
 - Greetings or wording addressed to us personally ("Dear Mrs Smith", "your child").
 
 **Emails about one student are always `family`.** Compass marks these with a line near the top like `Re: Firstname SURNAME (ABC1234), 0X at <school>`, which has a student's name in capitals and a student code in brackets. Whenever you see that, set the audience to `family`, with no exceptions, even if the content looks general. Event and class emails use different lines (`Re: Event - …`, `Re: Class - …`) and are judged on their content.
+
+**General notices are not personal.** A message to all families about an illness going around the school (chickenpox, gastro, head lice), a health or safety reminder, or a policy is `school`, as long as it doesn't identify a child, class or family. Write the actions in general terms ("Keep children with chickenpox home until blisters crust over"). The script will flag health words for the owner to check, which is expected.
+
+The same goes for notices to all families about personal-record topics, such as Student Support Group (SSG) or IEP meetings, interview or conference bookings, or wellbeing programs. If the email goes to all parents, has no `Re:` line naming a student, and doesn't identify a child, class or family, it is `school`. Word it generally ("Book SSG meetings on the Compass conference portal by …"). The topic list above only makes an email `family` when the content comes from one child's record.
 
 **When in doubt, the email is `family`.** A missing group post costs nothing. A leaked one can't be undone.
 
@@ -76,7 +80,7 @@ A newsletter is `school` even if a few items in it are for other year levels. Ju
   "kind": "newsletter | news | message | reminder",
   "subject": "<email subject, without the 'News: ' prefix>",
   "re_line": "<the email's 'Re: …' line copied exactly, or null if it has none>",
-  "from": "<who sent it: role plus staff names as signed, e.g. \"Prep teachers (Caitlin, Claire, Georgia)\"; school short name from school.md if unsigned>",
+  "from": "<school short name from school.md>",
   "received": "YYYY-MM-DDTHH:MM",
   "audience": "school | prep | class | family | other",
   "actions": [
@@ -102,11 +106,9 @@ Times are local school time with no offset. `received` is the email's date and t
 
 ### Field rules
 
-- **from**: shown as the post's From line. Use the sign-off: role plus staff names exactly as signed, such as "Prep teachers (Caitlin, Claire, Georgia)" or "Principal, Ms X". Never a parent or student name. If unsigned, use the school short name.
-
 - **re_line**: copy the `Re: …` line from the top of the email body exactly as written, or null if there isn't one. The script checks it independently. If it names a student, nothing from the email reaches the group, whatever audience you chose.
 
-- **actions**: things a family in our year level needs to do. `level` is `required` when not doing it leaves the child missing out or caught short: paying, consent, forms, and what to bring, wear or pack. `optional` is for tickets, volunteering, donations, auctions and social events. Include `due` whenever there's a deadline. One action per line, starting with a verb.
+- **actions**: things a family in our year level needs to do. `level` is `required` for payment, consent or forms, and `optional` for tickets, volunteering or donations. Include `due` whenever there's a deadline. One action per line, starting with a verb.
 - **dates** are only what a family in our year level would attend or plan around:
   - `no_school`: curriculum days, public holidays, student-free days.
   - `routine_change`: early finishes, changed drop-off or pickup, gate changes.
@@ -132,29 +134,6 @@ Give an overview of every page you read, so a parent who reads only the post sti
 - Pages in the skip list from `school.md` get no section.
 - Dates and actions that appear in several pages go in `dates` and `actions` once.
 
-## What a parent needs to see
-
-Write every post as if you were a parent in our year level reading it on a phone at pickup. They want to know, in this order:
-
-1. **Do I have to do something, and by when?** Pay, sign, reply, or send something in. Put the deadline on it.
-2. **Does my child need anything on the day?** What to bring, wear or pack, and what not to bring. This is a `required` action due that morning.
-3. **Does our routine change?** No school, early finish, changed drop-off, pickup or gate. Give the exact day and time.
-4. **When and where is it?** The event with its day, start and finish times, and place.
-5. **Who is it from and who is it for?** The `from` line and the audience cover this. Get them right.
-6. **Anything else useful.** Only then the FYI, and only if a parent would act on it or be glad to know.
-
-If a parent would read the post and still have to open Compass to find out what to do, the post has failed. If a line wouldn't change what a parent does or expects, leave it out.
-
-**The day-before reminder matters most.** A reminder about something happening today, tomorrow or the day after is the one parents actually read, so it must stand alone: the event with its date, times and place in `dates`, plus whatever to bring in `actions`. If the email doesn't repeat the times or place, you may bring them in from an earlier email on the same event. Follow every step:
-
-1. **Find the source.** Look up the event in `manifest.json` (`processed`, matched by subject and date), then open that earlier email in Gmail with get_thread (PLAIN_TEXT) and read it in full. Never carry over details from memory or from `group_text` alone. If you can't open it, carry nothing over.
-2. **Check nothing has superseded it.** Search Gmail for every school email about the same event from the earlier email's date up to now (`from:<sender> <event keywords> after:YYYY/MM/DD`) and read them. The newest statement of each detail wins. If this email or any later one changes a time, place, item or cost, use the newest version and drop the old one. Never show two versions of the same detail. If two emails conflict and you can't tell which is current, carry neither, and put the conflict in `private.note`.
-3. **Drop what's no longer relevant.** Bring over only what a parent still needs for the event itself: times, place, what to bring or wear, cost if still to pay. Leave out deadlines already passed, calls for helpers or volunteers that have closed or only made sense earlier (e.g. "contact the teacher ASAP to help" the day before), and anything already done. When in doubt, leave it out.
-4. **Keep it apart and in context.** This email's own lines (`actions`, `dates`, their notes) hold only what this email says. Earlier details go in their own section, one per earlier email, after this email's content, headed:
-   `From email dated <Day D Mon> – <subject> – <sender as signed>`
-   for example `From email dated Mon 12 Oct – Melbourne Aquarium Excursion – Prep team (Caitlin, Georgia, Claire)`. Word each detail as that email had it, without reinterpreting it.
-5. Don't invent anything that wasn't in one of the emails.
-
 ## Writing each item
 
 Parents skim these posts on a phone, often in a hurry. Every line has to make sense on its own, with no other line needed to explain it.
@@ -165,13 +144,13 @@ Parents skim these posts on a phone, often in a hurry. Every line has to make se
 2. **What to bring, wear or pack is an action**, `required`, due on the day (start of school if no time is given). It is not an FYI.
 3. **Make dates absolute.** "Tomorrow" becomes the actual day and date. Work it out from `received`.
 4. **Say each fact once.** If it's in `actions` or `dates`, it isn't also in `sections`. The subject is already in the header, so don't restate it as a bullet.
-5. **Leave out the filler:** greetings, "we hope you enjoyed", sign-offs, staff names inside bullets (the sender goes in `from`), "contact your teacher with any questions", "we look forward to…", and anything every parent already knows.
+5. **Leave out the filler:** greetings, "we hope you enjoyed", sign-offs, staff first names, "contact your teacher with any questions", "we look forward to…", and anything every parent already knows.
 6. **Be specific.** "Pay $25 for the excursion on Compass by Fri 16 Oct" beats "Payment needed for the excursion".
 7. **Don't soften or add.** Keep the school's facts exact (times, amounts, items). Don't invent detail, and don't add advice.
 
 **Picking `kind`:** `reminder` for anything that reminds families about an upcoming event, even when it's written as a class message. `message` for other teacher messages. `news` for "News:" items. `newsletter` for the newsletter.
 
-**An event that was already posted** still gets its date in `dates`. The script shows it again when the event is within the next two days (the day-before reminder), and drops it as a repeat when it's further off. For a further-off repeat, put anything new in `actions` or the date's `note` (changed time or place). If nothing is new, an empty file is fine.
+**An event that was already posted** (an excursion reminder the day before, say) still gets its date in `dates`. The script drops repeats, so put anything new for that day in `actions` (what to bring) or the date's `note` (changed time or place). If nothing is new, an empty file is fine.
 
 ### Example
 
@@ -186,17 +165,12 @@ Bad (contradicts itself, restates the subject, adds filler):
 Good:
 - `kind`: `reminder`
 - `actions`: "Send a small bag with lunchbox, water bottle and hat, not the school bag", `required`, due the excursion day at 8:45am
-- `from`: "Prep teachers (Caitlin, Claire, Georgia)"
-- `dates`: "Prep aquarium excursion" on that date, `attend`, no note (this email gives no times)
-- `sections`: one section headed "From email dated Mon 12 Oct – Melbourne Aquarium Excursion – Prep team (Caitlin, Georgia, Claire)" with "Leaves school 10:45am, back about 2:45pm". Its call for parent helpers is left out: the day before, it no longer applies.
+- `dates`: the aquarium excursion on that date
+- `sections`: empty
 
 ### Check before you write the file
 
-Reread the post as a parent who sees only this post: do they know what to do, what to send, and when to be where, without opening Compass?
-
-If the post uses an earlier email: is every detail still current, with nothing contradicting this email, nothing past its date, and the source dated and named?
-
-Then reread every line as a parent who sees only that line:
+Reread every line as a parent who sees only that line:
 - Does it make sense alone, without contradicting another line?
 - Is it a task, a date, or genuinely useful information, rather than filler?
 - Is anything said twice?

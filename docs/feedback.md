@@ -14,7 +14,7 @@ Send the bot any message in your private chat, for example:
 - `Skip the community page unless there's an event`
 - `Dates should say the year level when it's not the whole school`
 
-Reply to a preview or a note instead of sending a fresh message and the post's text is attached, so Claude knows which one you mean. The bot answers "Noted (#3)". Taps are read on the next poster cycle, so it can take up to 10 minutes to acknowledge.
+Reply to a preview or a note instead of sending a fresh message and the post's text is attached, so Claude knows which one you mean. The bot answers "Noted (#3)". Taps are read on the next poster cycle, so it can take up to 10 minutes to acknowledge. With the optional Worker ([worker.md](worker.md)) the bot answers "Noted" at once, `/learned` works at any time, and the feedback is written to `feedback/inbox.jsonl` on the next poster run.
 
 | Command | What it does |
 |---|---|

@@ -43,3 +43,4 @@ When something is withheld, the whole email is withheld, not just the matching l
 - `config.ini` holds your bot token and, optionally, an Apple app-specific password. It never leaves the computer and is git-ignored.
 - The Claude run has read-only Gmail access and writes only to `outbox/`. It never posts, labels, deletes or submits anything.
 - The poster talks only to `api.telegram.org`, and optionally `caldav.icloud.com`.
+- With the optional Worker, the poster also talks to your own Cloudflare Worker. It holds group previews awaiting your decision, your feedback messages until collected, and a copy of `learnings.md`. Family-only content never goes there. See [worker.md](worker.md).

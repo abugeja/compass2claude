@@ -22,6 +22,7 @@ import hashlib
 import html
 import json
 import logging
+import os
 import re
 import shutil
 import sys
@@ -31,7 +32,10 @@ import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent
+# Data (config, manifest, outbox and the other work folders) normally sits
+# next to this script. COMPASS_DATA_DIR points it elsewhere, so the code can
+# live in one repository and the personal data in another.
+BASE = Path(os.environ.get("COMPASS_DATA_DIR") or Path(__file__).resolve().parent).resolve()
 OUTBOX = BASE / "outbox"
 SENT = BASE / "sent"
 FAILED = BASE / "failed"
@@ -178,8 +182,13 @@ def cleanup_owner_chat(cfg, token, owner, state):
     keep_decided = cfg.getfloat("cleanup", "keep_decided_hours", fallback=6)
     keep_notes = cfg.getfloat("cleanup", "keep_notes_hours", fallback=24)
     t = now()
+    pending_batches = {p.stem for p in PENDING.glob("*.json")}
     doomed, kept = [], []
     for m in state.get("owner_msgs", []):
+        if m["kind"] == "preview" and not m.get("decided") \
+                and m.get("batch") not in pending_batches:
+            doomed.append(m["id"])  # decided, but the tap handling broke off
+            continue
         sent = datetime.fromisoformat(m["sent"])
         if (t - sent).total_seconds() > 47 * 3600:
             continue  # too old for Telegram to delete; stop tracking it
@@ -242,16 +251,20 @@ PATTERNS = [
     (STUDENT_CODE, "a Compass student code"),
     (STUDENT_NAME, "a student name in Compass format"),
     (re.compile(r"\bDear\s+(?:Mr|Mrs|Ms|Miss|Dr)\b", re.I), "a personal greeting"),
-    (re.compile(r"\b(?:absent|absence|attendance|report card|incident|injur|medical|"
+    (TOPIC_RE := re.compile(r"\b(?:absent|absence|attendance|report card|incident|injur|medical|"
                 r"medication|allerg|behaviour|wellbeing referral|invoice|overdue|"
                 r"outstanding (?:balance|amount))", re.I), "a personal-record topic"),
 ]
+# Topic words are often fine in whole-school notices ("seek medical advice").
+# On their own they don't block a post; they force a manual review instead.
+SOFT_REASONS = {"contains a personal-record topic"}
 
 URL_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
 
 
 def guard(text, terms, link_allow):
-    """Return a list of reasons this text must not go to the group."""
+    """Return a list of reasons this text must not go to the group.
+    Only reasons in SOFT_REASONS may be overridden by the owner."""
     reasons = []
     low = text.lower()
     for t in terms:
@@ -344,9 +357,10 @@ def render_header(item, audience_label=None, tag=True):
     if tag:
         lines.append(f"<b>{KIND_TAG.get(item.get('kind'), '📌 UPDATE')}</b>")
     lines.append(f"📬 <b>Subject:</b> {esc(item.get('subject'))}")
-    lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if audience_label:
         lines.append(f"👥 <b>To:</b> {esc(audience_label)}")
+    else:
+        lines.append(f"👤 <b>From:</b> {esc(item.get('from') or 'School')}")
     if when:
         lines.append(f"🕒 <b>Date:</b> {when}")
     return "\n".join(lines)
@@ -409,20 +423,6 @@ def norm(s):
 
 def event_key(ev):
     return f"{(ev.get('start') or '')[:10]}|{norm(ev.get('title'))}"
-
-
-def is_soon(ev, days):
-    """True when an event starts today or within the next `days` days. A
-    parent wants the event shown again on the day-before reminder, even if it
-    was posted weeks earlier."""
-    if days <= 0:
-        return False
-    try:
-        start = datetime.fromisoformat((ev.get("start") or "")[:10]).date()
-    except ValueError:
-        return False
-    today = now().date()
-    return today <= start <= today + timedelta(days=days)
 
 
 def action_key(a):
@@ -551,6 +551,16 @@ def handle_message(cfg, state, msg):
 
 # ---------------------------------------------------------------- approvals
 
+def answer_callback(token, cq_id, text):
+    """Best effort: Telegram rejects answers to taps older than a few seconds
+    (HTTP 400), which happens when a tap is picked up on a later cycle. That
+    must not stop the preview being collapsed and cleaned up."""
+    try:
+        tg_call(token, "answerCallbackQuery", {"callback_query_id": cq_id, "text": text})
+    except Exception as e:
+        log.info("could not answer tap (%s); carrying on", e)
+
+
 def handle_callbacks(cfg, manifest, state, timeout=0):
     token = cfg["telegram"]["bot_token"]
     owner = cfg["telegram"].get("private_chat_id", "").strip()
@@ -569,14 +579,19 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
         if not cq:
             continue
         if str(cq["from"]["id"]) != owner:
-            tg_call(token, "answerCallbackQuery",
-                    {"callback_query_id": cq["id"], "text": "Not allowed."})
+            answer_callback(token, cq["id"], "Not allowed.")
             continue
         action, _, batch_id = (cq.get("data") or "").partition(":")
         pfile = PENDING / f"{batch_id}.json"
         if not pfile.exists():
-            tg_call(token, "answerCallbackQuery",
-                    {"callback_query_id": cq["id"], "text": "Already handled."})
+            answer_callback(token, cq["id"], "Already handled.")
+            # A stale preview (e.g. a tap that failed earlier): remove it
+            # rather than leave dead buttons in the chat.
+            stale = (cq.get("message") or {}).get("message_id")
+            if stale:
+                delete_owner_msgs(token, owner, [stale])
+                state["owner_msgs"] = [m for m in state.get("owner_msgs", [])
+                                       if m["id"] != stale]
             continue
         batch = load_json(pfile, {})
         if action == "post":
@@ -591,9 +606,8 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
             rec["group_decided"] = stamp()
         save_json(MANIFEST, manifest)
         pfile.unlink()
-        tg_call(token, "answerCallbackQuery",
-                {"callback_query_id": cq["id"],
-                 "text": "Posted to the channel." if outcome == "posted" else "Skipped."})
+        answer_callback(token, cq["id"],
+                        "Posted to the channel." if outcome == "posted" else "Skipped.")
         subj = ", ".join(manifest["processed"].get(i, {}).get("subject") or i
                          for i in batch["items"])
         icon, word = ("✅", "Posted") if outcome == "posted" else ("⏭️", "Skipped")
@@ -615,6 +629,134 @@ def handle_callbacks(cfg, manifest, state, timeout=0):
             delete_owner_msgs(token, owner, extra)
             state["owner_msgs"] = [m for m in state["owner_msgs"] if m["id"] not in extra]
     save_json(STATE, state)
+
+
+# ---------------------------------------------------------------- worker
+#
+# Optional. With [worker] url and secret set, a Cloudflare Worker (worker/)
+# receives button taps and owner messages from Telegram and acts on taps at
+# once. This script uploads each preview batch to it and, on every run,
+# collects what happened. Without [worker], taps are read by polling above.
+
+def worker_cfg(cfg):
+    url = cfg.get("worker", "url", fallback="").strip().rstrip("/")
+    secret = cfg.get("worker", "secret", fallback="").strip()
+    return (url, secret) if url and secret else None
+
+
+def worker_call(w, method, path, body=None):
+    req = urllib.request.Request(
+        w[0] + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Authorization": "Bearer " + w[1], "Content-Type": "application/json",
+                 "User-Agent": "compass2claude"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read() or b"null")
+
+
+def worker_push_pending(w, manifest, pfile):
+    """Give the Worker the exact messages to post if the owner taps Post."""
+    batch = load_json(pfile, {})
+    subj = ", ".join(manifest["processed"].get(i, {}).get("subject") or i
+                     for i in batch.get("items", []))
+    worker_call(w, "PUT", f"/pending/{pfile.stem}", {
+        "items": batch.get("items", []), "messages": batch["messages"],
+        "subject": subj, "created": batch.get("created")})
+    batch["on_worker"] = True
+    save_json(pfile, batch)
+
+
+def local_stamp(epoch):
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(epoch, ZoneInfo(TZ_NAME)).replace(tzinfo=None) \
+        .isoformat(timespec="seconds")
+
+
+def sync_worker(cfg, manifest, state, w):
+    """Upload what the Worker needs, then apply what it has collected."""
+    token = cfg["telegram"]["bot_token"]
+    owner = cfg["telegram"].get("private_chat_id", "").strip()
+
+    for pfile in sorted(PENDING.glob("*.json")):
+        if not load_json(pfile, {}).get("on_worker"):
+            worker_push_pending(w, manifest, pfile)
+
+    # Lessons learnt: the Worker answers /learned from this copy.
+    text = LEARNINGS.read_text(encoding="utf-8") if LEARNINGS.exists() else ""
+    digest = hashlib.sha1(text.encode()).hexdigest()
+    if state.get("worker_learnings") != digest:
+        worker_call(w, "PUT", "/learnings", {"text": text})
+        state["worker_learnings"] = digest
+
+    data = worker_call(w, "GET", "/sync")
+    seen = state.setdefault("worker_seen", [])
+    keys = []
+
+    for d in data.get("decisions", []):
+        keys.append(d["key"])
+        batch_id = d["batch"]
+        pfile = PENDING / f"{batch_id}.json"
+        when = local_stamp(d["at"])
+        for sid in load_json(pfile, {}).get("items") or d.get("items") or []:
+            rec = manifest["processed"].setdefault(sid, {})
+            rec["group_status"] = d["outcome"]
+            rec["group_decided"] = when
+        save_json(MANIFEST, manifest)
+        pfile.unlink(missing_ok=True)
+        extra = []
+        for m in state.get("owner_msgs", []):
+            if m.get("batch") == batch_id:
+                m["decided"] = when
+                if m["id"] != d.get("message_id"):
+                    extra.append(m["id"])
+        if extra:
+            delete_owner_msgs(token, owner, extra)
+            state["owner_msgs"] = [m for m in state["owner_msgs"] if m["id"] not in extra]
+        log.info("worker: %s %s", batch_id, d["outcome"])
+
+    # Feedback the owner sent to the bot. The Worker has already replied.
+    for msg in data.get("messages", []):
+        keys.append(msg["key"])
+        if msg["key"] in seen:
+            continue
+        n = save_feedback(msg["text"], msg.get("about"))
+        seen.append(msg["key"])
+        log.info("feedback #%d saved (via worker)", n)
+
+    # Replies the Worker sent, so cleanup can delete them later.
+    for nt in data.get("notes", []):
+        keys.append(nt["key"])
+        if nt["key"] in seen:
+            continue
+        state.setdefault("owner_msgs", []).append({
+            "id": nt["id"], "kind": "note", "batch": None,
+            "sent": local_stamp(nt["at"]), "decided": None})
+        seen.append(nt["key"])
+
+    # A batch the Worker lost (expired) would leave dead buttons: re-upload.
+    on_worker = set(data.get("pending", []))
+    decided = {d["batch"] for d in data.get("decisions", [])}
+    for pfile in PENDING.glob("*.json"):
+        if pfile.stem not in on_worker and pfile.stem not in decided:
+            worker_push_pending(w, manifest, pfile)
+
+    state["worker_seen"] = seen[-200:]
+    save_json(STATE, state)
+    if keys:
+        worker_call(w, "POST", "/ack", {"keys": keys})
+
+
+def set_webhook(cfg, token, w):
+    """Point Telegram at the Worker. Uploads pending previews first so no
+    button is left without its batch."""
+    manifest = load_json(MANIFEST, {"processed": {}})
+    manifest.setdefault("processed", {})
+    state = load_json(STATE, {})
+    handle_callbacks(cfg, manifest, state)  # drain taps already waiting
+    sync_worker(cfg, manifest, state, w)
+    tg_call(token, "setWebhook", {
+        "url": w[0] + "/tg", "secret_token": w[1], "max_connections": 1,
+        "allowed_updates": ["callback_query", "message"]})
 
 
 # ---------------------------------------------------------------- processing
@@ -708,10 +850,8 @@ def process_outbox(cfg, manifest, paths):
             # Group eligibility, decided in code.
             actions = [a for a in item.get("actions") or []
                        if action_key(a) not in posted_keys]
-            soon_days = cfg.getint("group", "repeat_dates_within_days", fallback=2)
             dates = [d for d in item.get("dates") or []
-                     if f"d|{event_key(d)}" not in posted_keys
-                     or is_soon(d, soon_days)]
+                     if f"d|{event_key(d)}" not in posted_keys]
             has_fyi = any(s.get("fyi") for s in item.get("sections") or [])
             withheld = None
             if names_a_student(item.get("re_line")) or names_a_student(item.get("subject")):
@@ -723,9 +863,14 @@ def process_outbox(cfg, manifest, paths):
             else:
                 block = render_group_block(item, actions, dates)
                 reasons = guard(html.unescape(block), terms, link_allow)
-                if reasons:
+                hard = [r for r in reasons if r not in SOFT_REASONS]
+                if hard:
                     withheld = "; ".join(reasons)
                 else:
+                    if reasons:
+                        words = sorted({m.group(0).lower() for m in
+                                        TOPIC_RE.finditer(html.unescape(block))})
+                        rec["_review"] = ", ".join(words) or "a sensitive topic"
                     group_blocks.append(block)
                     group_items.append(sid)
                     rec["group_text"] = block
@@ -733,8 +878,7 @@ def process_outbox(cfg, manifest, paths):
                     for a in actions:
                         posted_keys.append(action_key(a))
                     for d in dates:
-                        if f"d|{event_key(d)}" not in posted_keys:
-                            posted_keys.append(f"d|{event_key(d)}")
+                        posted_keys.append(f"d|{event_key(d)}")
 
             if withheld:
                 rec["group_status"] = "withheld"
@@ -804,6 +948,24 @@ def main():
         print(f"Cleared the bot chat (checked {n} message ids). Pending previews kept.")
         return
 
+    if "--set-webhook" in sys.argv or "--delete-webhook" in sys.argv:
+        w = worker_cfg(cfg)
+        if "--set-webhook" in sys.argv and not w:
+            sys.exit("Fill in [worker] url and secret in config.ini first.")
+        if not take_lock():
+            sys.exit("The poster is running; try again in a few minutes.")
+        try:
+            if "--set-webhook" in sys.argv:
+                set_webhook(cfg, token, w)
+                print("Taps and messages now go to the Worker.")
+            else:
+                tg_call(token, "deleteWebhook", {})
+                print("Webhook removed. Now clear [worker] url in config.ini "
+                      "so the poster reads taps itself again.")
+        finally:
+            LOCK.unlink(missing_ok=True)
+        return
+
     if "--whoami" in sys.argv:
         for u in tg_call(token, "getUpdates", {}):
             chat = (u.get("message") or u.get("channel_post") or {}).get("chat", {})
@@ -856,8 +1018,14 @@ def run(cfg, token):
     state = load_json(STATE, {})
     owner = cfg["telegram"].get("private_chat_id", "").strip()
     review = cfg.getboolean("group", "review", fallback=True)
+    worker = worker_cfg(cfg)
 
-    if owner:
+    if owner and worker:
+        try:
+            sync_worker(cfg, manifest, state, worker)
+        except Exception:
+            log.exception("worker sync failed")
+    elif owner:
         try:
             handle_callbacks(cfg, manifest, state)
         except Exception:
@@ -884,7 +1052,8 @@ def run(cfg, token):
         except Exception:
             log.exception("cleanup failed")
         save_json(STATE, state)
-        listen_for_approvals(cfg, manifest, state, started)
+        if not worker:
+            listen_for_approvals(cfg, manifest, state, started)
 
 
 def process_and_send(cfg, token, owner, review, manifest, state):
@@ -902,6 +1071,11 @@ def process_and_send(cfg, token, owner, review, manifest, state):
         except Exception:
             log.exception("failed on %s; will retry next cycle", path.name)
             for p in set(PENDING.glob("*.json")) - before:
+                if worker_cfg(cfg):
+                    try:
+                        worker_call(worker_cfg(cfg), "DELETE", f"/pending/{p.stem}")
+                    except Exception:
+                        log.info("could not remove %s from the worker", p.stem)
                 p.unlink()
             manifest.clear()
             manifest.update(snapshot)
@@ -933,13 +1107,27 @@ def _send(cfg, token, owner, review, manifest, group_blocks, group_items, privat
     for block, sid in zip(group_blocks, group_items):
         msgs = chunk_blocks(manifest["processed"][sid].pop("_parts", None) or [block])
         kind = manifest["processed"][sid].get("kind")
-        if review and kind not in auto_kinds:
+        flagged = manifest["processed"][sid].pop("_review", None)
+        if flagged:
+            manifest["processed"][sid]["review_reason"] = flagged
+            if not owner:
+                manifest["processed"][sid]["group_status"] = "withheld"
+                manifest["processed"][sid]["withheld_reason"] = f"needs review ({flagged})"
+                continue
+        if (review and kind not in auto_kinds) or (flagged and owner):
             batch_id = uuid.uuid4().hex[:12]
             save_json(PENDING / f"{batch_id}.json",
                       {"items": [sid], "messages": msgs, "created": stamp()})
+            if worker_cfg(cfg):  # before any button exists
+                worker_push_pending(worker_cfg(cfg), manifest, PENDING / f"{batch_id}.json")
             for i, msg in enumerate(msgs):
                 last = i == len(msgs) - 1
-                label = "<i>Preview, not posted yet</i>\n" if i == 0 else ""
+                label = ""
+                if i == 0:
+                    label = "<i>Preview, not posted yet</i>\n"
+                    if flagged:
+                        label = (f"⚠️ <b>Check before posting.</b> It mentions: {esc(flagged)}. "
+                                 f"Fine for a general notice, not if it's about one child.\n")
                 send_owner(token, owner, state, label + msg, "preview", batch=batch_id, buttons=[
                     {"text": "Post to channel", "callback_data": f"post:{batch_id}"},
                     {"text": "Skip", "callback_data": f"skip:{batch_id}"},

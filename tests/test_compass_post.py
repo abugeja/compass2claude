@@ -445,6 +445,42 @@ class PosterTest(unittest.TestCase):
         self.assertIn(note, self.deleted())
         self.assertNotIn(pending_b, self.deleted())        # never while pending
 
+    def test_late_tap_still_collapses_and_cleans_up(self):
+        # Telegram answers HTTP 400 to taps picked up too late; the skip must still land.
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        real = self.m.tg_call
+        def flaky(token, method, params):
+            if method == "answerCallbackQuery":
+                raise RuntimeError("HTTP Error 400: query is too old")
+            return real(token, method, params)
+        self.m.tg_call = flaky
+        msg = self.tap("skip", "a")
+        self.m.tg_call = real
+        edits = [p for m, p in self.calls if m == "editMessageText"]
+        self.assertEqual(edits[-1]["message_id"], msg)
+        rec = [m for m in self.state()["owner_msgs"] if m["id"] == msg][0]
+        self.assertTrue(rec["decided"])
+        self.assertEqual(self.manifest()["a"]["group_status"], "skipped")
+
+    def test_tap_on_stale_preview_deletes_it(self):
+        self.updates[:] = [{"update_id": 60, "callback_query": {
+            "id": "60", "from": {"id": 42}, "data": "skip:gone123",
+            "message": {"chat": {"id": 42}, "message_id": 777}}}]
+        self.run_once()
+        self.updates[:] = []
+        self.assertIn(777, self.deleted())
+
+    def test_undecided_preview_without_pending_batch_is_cleaned(self):
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        prev = [m["id"] for m in self.state()["owner_msgs"] if m["kind"] == "preview"][0]
+        for f in (self.dir / "pending").glob("*.json"):
+            f.unlink()   # as if the tap was handled but broke off before marking it
+        self.calls.clear()
+        self.run_once()
+        self.assertIn(prev, self.deleted())
+
     def test_purge_keeps_pending(self):
         self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
         self.run_once()
@@ -555,6 +591,101 @@ class PosterTest(unittest.TestCase):
         self.m.tg_call = self._fake
         self.run_once()
         self.assertEqual(len(self.to_channel()), 1)
+
+    # ---- approvals through the Cloudflare Worker
+
+    def use_worker(self):
+        cfg = self.dir / "config.ini"
+        cfg.write_text(cfg.read_text() + "[worker]\nurl = https://w.example/\nsecret = s\n")
+        self.wcalls, self.wsync = [], {}
+        def fake(w, method, path, body=None):
+            self.wcalls.append((method, path, body))
+            return dict(self.wsync) if path == "/sync" else {"ok": True}
+        self.m.worker_call = fake
+
+    def test_worker_gets_batch_before_buttons_and_no_polling(self):
+        self.use_worker()
+        self.drop(item("a", subject="Disco helpers", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        puts = [(p, b) for m, p, b in self.wcalls if m == "PUT" and p.startswith("/pending/")]
+        self.assertEqual(len(puts), 1)
+        self.assertEqual(puts[0][1]["subject"], "Disco helpers")
+        self.assertEqual(puts[0][1]["items"], ["a"])
+        self.assertIn("Subject:</b> Disco helpers", puts[0][1]["messages"][0])
+        self.assertNotIn("getUpdates", [m for m, _ in self.calls])
+        self.assertEqual(self.to_channel(), [])
+
+    def test_worker_decision_applied_and_acknowledged(self):
+        self.use_worker()
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        self.m.now = lambda: datetime(2026, 10, 9, 11, 5)
+        self.run_once()  # a reminder copy
+        batch = next((self.dir / "pending").glob("*.json")).stem
+        msgs = [m["id"] for m in self.state()["owner_msgs"] if m["kind"] == "preview"]
+        self.assertEqual(len(msgs), 2)
+        self.wsync = {"decisions": [{"key": f"decision:{batch}", "batch": batch,
+                                     "outcome": "posted", "items": ["a"],
+                                     "at": 1791504000, "message_id": msgs[0]}],
+                      "pending": []}
+        self.run_once()
+        self.assertEqual(self.manifest()["a"]["group_status"], "posted")
+        self.assertEqual(list((self.dir / "pending").glob("*.json")), [])
+        self.assertEqual(self.deleted(), [msgs[1]])
+        self.assertEqual(self.to_channel(), [])  # the Worker posted, not the script
+        self.assertEqual(self.wcalls[-1], ("POST", "/ack", {"keys": [f"decision:{batch}"]}))
+
+    def test_worker_feedback_saved_once_and_learnings_uploaded(self):
+        self.use_worker()
+        (self.dir / "learnings.md").write_text("- Be brief")
+        self.wsync = {"messages": [{"key": "inbox:9", "text": "Shorter please",
+                                    "about": "the post", "at": 1791504000}],
+                      "notes": [{"key": "note:77", "id": 77, "at": 1791504000}]}
+        self.run_once()
+        self.run_once()  # the ack was lost: the same records come back
+        fb = self.feedback()
+        self.assertEqual([f["text"] for f in fb], ["Shorter please"])
+        self.assertEqual(fb[0]["about"], "the post")
+        self.assertEqual([m["id"] for m in self.state()["owner_msgs"]], [77])
+        ups = [b for m, p, b in self.wcalls if p == "/learnings"]
+        self.assertEqual(ups, [{"text": "- Be brief"}])
+        self.assertEqual(self.sent, [])  # the Worker already replied
+
+    def test_worker_upload_failure_sends_no_buttons(self):
+        self.use_worker()
+        def down(w, method, path, body=None):
+            if method == "PUT" and path.startswith("/pending/"):
+                raise RuntimeError("worker down")
+            return {}
+        self.m.worker_call = down
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        self.assertEqual(self.previews(), [])
+        self.assertTrue((self.dir / "outbox" / "a.json").exists())
+        self.assertEqual(list((self.dir / "pending").glob("*.json")), [])
+
+    def test_data_dir_can_be_separate_from_the_code(self):
+        data = Path(tempfile.mkdtemp())
+        try:
+            (data / "config.ini").write_text((self.dir / "config.ini").read_text())
+            (data / "private_terms.txt").write_text(TERMS)
+            (data / "outbox").mkdir()
+            (data / "outbox" / "a.json").write_text(json.dumps(
+                item("a", sections=[{"heading": "FYI", "fyi": ["x"]}])))
+            os.environ["COMPASS_DATA_DIR"] = str(data)
+            sys.modules.pop("compass_post", None)
+            import compass_post as m
+            m.now, m.tg_call = self.m.now, self._fake
+            sys.argv = ["compass_post.py"]
+            m.main()
+            m.logging.shutdown()
+            self.assertEqual(len(self.previews()), 1)
+            self.assertTrue((data / "manifest.json").exists())
+            self.assertTrue((data / "sent" / "a.json").exists())
+            self.assertFalse((self.dir / "manifest.json").exists())
+        finally:
+            os.environ.pop("COMPASS_DATA_DIR", None)
+            shutil.rmtree(data, ignore_errors=True)
 
     def test_calendar_queue_and_dedupe(self):
         ev = {"title": "Excursion", "start": "2026-10-21", "all_day": True, "kind": "attend"}

@@ -137,6 +137,7 @@ Telegram only lets bots delete their own messages, and only within 48 hours, so 
 | `private_terms.example.txt` | Template for blocked words |
 | `requirements.txt` | Python packages |
 | `samples/` | Two test posts: one to approve, one to skip |
+| `worker/` | Optional Cloudflare Worker for instant approvals ([docs/worker.md](docs/worker.md)) |
 | `tests/` | Offline tests (`python -m unittest discover -s tests -v`) |
 | `docs/` | Setup, privacy, file format, scheduled task, feedback, troubleshooting |
 
@@ -146,7 +147,7 @@ Created at runtime and git-ignored: `outbox/`, `pending/`, `sent/`, `hold/`, `fa
 
 - **WhatsApp isn't supported.** Meta's official API can't post into an ordinary parents' group, and unofficial tools risk a ban on your number. Telegram's bot API supports this properly. Share the channel's invite link in your WhatsApp group instead.
 - **The computer must be on.** Scheduled runs and the poster both run there.
-- **Approvals are handled while the poster runs.** It listens for up to 9 minutes after each cycle while anything awaits approval, so taps normally respond within seconds.
+- **Approvals are handled while the poster runs.** It listens for up to 9 minutes after each cycle while anything awaits approval, so taps normally respond within seconds. For taps that act at once with no poster running, add the optional Cloudflare Worker: see [docs/worker.md](docs/worker.md).
 
 ## Contributing
 

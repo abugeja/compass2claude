@@ -18,6 +18,11 @@ hold/
 failed/
 superseded/
 
+# Worker tooling
+node_modules/
+.wrangler/
+.dev.vars
+
 # Python
 __pycache__/
 *.pyc
