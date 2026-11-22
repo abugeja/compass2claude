@@ -1,0 +1,17 @@
+name = "compass2claude-fetch"
+main = "src/index.js"
+compatibility_date = "2026-11-20"
+workers_dev = true
+
+# Keep request logs off: Compass URLs carry a personal access token.
+[observability]
+enabled = false
+
+[browser]
+binding = "BROWSER"
+
+[vars]
+ALLOWED_HOSTS = "newsletters.naavi.com,williamstownps-vic.compass.education,williamstownps.vic.edu.au,www.williamstownps.vic.edu.au"
+
+# Secret (set with `npx wrangler secret put FETCH_KEY`, never commit it):
+#   FETCH_KEY  shared key the cloud task sends as "Authorization: Bearer <key>"

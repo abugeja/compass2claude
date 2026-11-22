@@ -1,0 +1,9 @@
+{
+  "name": "compass2claude-fetch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/fetch.test.mjs",
+    "deploy": "npx wrangler deploy"
+  }
+}

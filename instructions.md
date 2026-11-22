@@ -54,6 +54,7 @@ You do not post to Telegram or touch the calendar. The local script does that fr
    - Direct messages and event reminders: the content is in the body.
    - "News:" emails: open the "View news item" link in Chrome in a new tab. If it links on to an external newsletter (see `school.md`), open that too. Read the "In this issue" list first, then open **every page on it** except the pages `school.md` says to skip. Every page you read gets its own section (see Newsletters below). Close your tabs when done.
    - If a page won't load, put that in `private.note` with no link, and say so in your final reply.
+   - **Cloud runs (no browser):** fetch each page with `python scripts/browser_fetch.py <url>` instead of Chrome. It returns the page as Markdown, with Compass links already removed. For a page that is only images (Team Kids, sponsor flyers), add `--screenshot <file>.png` and read the image. Exit code `3` means Compass wants a sign-in: write a `private.note` saying to open the item in Compass, with no link. Exit code `2` means the fetcher isn't set up: say so in your final reply. Never print, save or commit the Compass URL itself, because it carries a login token.
 4. **Decide the audience** (see below), then **write one file per email** to `outbox/<YYYYMMDD>-<gmail message id>.json` in the format below.
 5. Never reply to, label, archive, delete or mark emails as read. Never pay, RSVP, consent or submit anything in Compass. Read only.
 

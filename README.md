@@ -138,6 +138,7 @@ Telegram only lets bots delete their own messages, and only within 48 hours, so 
 | `requirements.txt` | Python packages |
 | `samples/` | Two test posts: one to approve, one to skip |
 | `worker/` | Optional Cloudflare Worker for instant approvals ([docs/worker.md](docs/worker.md)) |
+| `fetch-worker/`, `scripts/browser_fetch.py` | Optional Browser Run fetcher so cloud runs can read News items ([docs/fetch-worker.md](docs/fetch-worker.md)) |
 | `tests/` | Offline tests (`python -m unittest discover -s tests -v`) |
 | `docs/` | Setup, privacy, file format, scheduled task, feedback, troubleshooting |
 
