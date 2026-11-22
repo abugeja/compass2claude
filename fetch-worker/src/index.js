@@ -12,11 +12,11 @@
 //   - Nothing about the request URL is logged.
 
 const DEFAULT_HOSTS =
-  "newsletters.naavi.com,williamstownps-vic.compass.education,williamstownps.vic.edu.au,www.williamstownps.vic.edu.au";
+  "newsletters.naavi.com,yourschool-vic.compass.education,yourschool.vic.edu.au,www.yourschool.vic.edu.au";
 
 const COMPASS_RE = /https?:\/\/[^\s)\]>"']*compass\.education[^\s)\]>"']*/gi;
 const TOKEN_RE = /accessToken=[A-Za-z0-9_\-.]+/gi;
-const LOGIN_RE = /(forgot (your )?password|sign in to compass|log ?in to compass|username[\s\S]{0,80}password)/i;
+const LOGIN_RE = /(forgot (your )?password|sign in to compass|log ?in to compass|username[\s\S]{0,80}password|verify you are human|verifying your connection)/i;
 
 export function allowedHosts(env) {
   return (env.ALLOWED_HOSTS || DEFAULT_HOSTS)

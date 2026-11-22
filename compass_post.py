@@ -710,10 +710,34 @@ def sync_worker(cfg, manifest, state, w):
         batch_id = d["batch"]
         pfile = PENDING / f"{batch_id}.json"
         when = local_stamp(d["at"])
+        outcome, failed = d["outcome"], None
+        if outcome == "approved":
+            # The owner tapped Post but the Worker couldn't reach the channel.
+            # Post the parts it didn't send, with this script's settings.
+            log.warning("worker could not post %s (%s); posting here",
+                        batch_id, d.get("error"))
+            msgs = load_json(pfile, {}).get("messages") or []
+            try:
+                for msg in msgs[d.get("sent") or 0:]:
+                    tg_send(token, cfg["telegram"]["channel_id"], msg)
+                outcome = "posted" if msgs else "post_failed"
+                failed = None if msgs else "batch file missing"
+            except Exception as e:
+                outcome, failed = "post_failed", str(e)
+            if failed:
+                log.error("posting %s failed: %s", batch_id, failed)
+                try:
+                    send_owner(token, owner, state,
+                               f"⚠️ Could not post an approved item to the channel: "
+                               f"{esc(failed)}. Ask Claude to re-post it once fixed.", "note")
+                except Exception:
+                    log.exception("could not tell the owner")
         for sid in load_json(pfile, {}).get("items") or d.get("items") or []:
             rec = manifest["processed"].setdefault(sid, {})
-            rec["group_status"] = d["outcome"]
+            rec["group_status"] = outcome
             rec["group_decided"] = when
+            if failed:
+                rec["withheld_reason"] = f"channel post failed: {failed}"[:200]
         save_json(MANIFEST, manifest)
         pfile.unlink(missing_ok=True)
         extra = []
@@ -725,7 +749,7 @@ def sync_worker(cfg, manifest, state, w):
         if extra:
             delete_owner_msgs(token, owner, extra)
             state["owner_msgs"] = [m for m in state["owner_msgs"] if m["id"] not in extra]
-        log.info("worker: %s %s", batch_id, d["outcome"])
+        log.info("worker: %s %s", batch_id, outcome)
 
     # Feedback the owner sent to the bot. The Worker has already replied.
     for msg in data.get("messages", []):
@@ -861,11 +885,15 @@ def process_outbox(cfg, manifest, paths):
             queue_events(manifest, cal)
 
             # Group eligibility, decided in code.
+            # "force": true re-posts or hand-posts an item: it skips only the
+            # already-posted checks. Every guardrail and the owner's approval
+            # still apply.
+            force = item.get("force") is True
             actions = [a for a in item.get("actions") or []
-                       if action_key(a) not in posted_keys]
+                       if force or action_key(a) not in posted_keys]
             soon_days = cfg.getint("group", "repeat_dates_within_days", fallback=2)
             dates = [d for d in item.get("dates") or []
-                     if f"d|{event_key(d)}" not in posted_keys
+                     if force or f"d|{event_key(d)}" not in posted_keys
                      or is_soon(d, soon_days)]
             has_fyi = any(s.get("fyi") for s in item.get("sections") or [])
             withheld = None
@@ -891,7 +919,8 @@ def process_outbox(cfg, manifest, paths):
                     rec["group_text"] = block
                     rec["_parts"] = render_group_parts(item, actions, dates)
                     for a in actions:
-                        posted_keys.append(action_key(a))
+                        if action_key(a) not in posted_keys:
+                            posted_keys.append(action_key(a))
                     for d in dates:
                         if f"d|{event_key(d)}" not in posted_keys:
                             posted_keys.append(f"d|{event_key(d)}")

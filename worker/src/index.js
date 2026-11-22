@@ -80,7 +80,10 @@ async function note(env, text) {
 async function onTap(env, cq) {
   const answer = (text) =>
     quiet(tg(env, "answerCallbackQuery", { callback_query_id: cq.id, text }));
-  if (String(cq.from?.id) !== String(env.OWNER_ID)) return answer("Not allowed.");
+  if (String(cq.from?.id) !== String(env.OWNER_ID)) {
+    console.log(`tap from ${cq.from?.id} refused: not OWNER_ID`);
+    return answer("Not allowed.");
+  }
 
   const [action, batch] = String(cq.data || "").split(":");
   const tapped = cq.message?.message_id;
@@ -107,14 +110,17 @@ async function onTap(env, cq) {
           parse_mode: "HTML", disable_web_page_preview: true,
         });
       } catch (e) {
+        // Hand the post to the poster, which sends with its own settings on
+        // its next run, and say why, so a bad setting here is visible.
         console.log(`post failed for ${batch}: ${e.message}`);
-        await answer("Could not post. Nothing was lost; tap again in a minute.");
-        return;
+        pending.error = String(e.message || e).slice(0, 200);
+        outcome = "approved";
+        break;
       }
       pending.sent = i + 1;
       await env.STORE.put(key, JSON.stringify(pending), { expirationTtl: PENDING_TTL });
     }
-    outcome = "posted";
+    if (outcome !== "approved") outcome = "posted";
   } else if (action !== "skip") {
     return answer("Unknown button.");
   }
@@ -122,12 +128,22 @@ async function onTap(env, cq) {
   await env.STORE.put(`decision:${batch}`, JSON.stringify({
     batch, outcome, items: pending.items || [],
     at: Math.floor(Date.now() / 1000), message_id: tapped ?? null,
+    sent: pending.sent || 0, error: pending.error || null,
   }), { expirationTtl: RECORD_TTL });
   await env.STORE.delete(key);
 
-  await answer(outcome === "posted" ? "Posted to the channel." : "Skipped.");
+  if (outcome === "approved") {
+    await quiet(tg(env, "answerCallbackQuery", {
+      callback_query_id: cq.id, show_alert: true,
+      text: (`Approved. Telegram refused the instant post (${pending.error}), ` +
+             "so it goes out on the next poster run (within 30 min).").slice(0, 200),
+    }));
+  } else {
+    await answer(outcome === "posted" ? "Posted to the channel." : "Skipped.");
+  }
   if (tapped) {
-    const [icon, word] = outcome === "posted" ? ["✅", "Posted"] : ["⏭️", "Skipped"];
+    const [icon, word] = outcome === "posted" ? ["✅", "Posted"]
+      : outcome === "approved" ? ["⏳", "Approved, posting on next run"] : ["⏭️", "Skipped"];
     await quiet(tg(env, "editMessageText", {
       chat_id: env.OWNER_ID, message_id: tapped, parse_mode: "HTML",
       text: `${icon} <b>${word}</b> · ${esc(pending.subject || batch)} · ${clock(env)}`,
@@ -139,7 +155,10 @@ async function onTap(env, cq) {
 async function onMessage(env, updateId, msg) {
   const owner = String(env.OWNER_ID);
   if (msg.chat?.type !== "private" || String(msg.chat?.id) !== owner ||
-      String(msg.from?.id) !== owner) return;
+      String(msg.from?.id) !== owner) {
+    console.log(`ignored message from chat ${msg.chat?.id}: not OWNER_ID`);
+    return;
+  }
   let text = (msg.text || msg.caption || "").trim();
   if (!text) return;
 
@@ -241,8 +260,18 @@ async function api(request, env, path) {
   return new Response("not found", { status: 404 });
 }
 
+// Secrets pasted at a prompt can pick up spaces, quotes or a newline.
+function clean(env) {
+  const out = { ...env };
+  for (const k of ["BOT_TOKEN", "OWNER_ID", "CHANNEL_ID", "API_SECRET"]) {
+    if (typeof out[k] === "string") out[k] = out[k].trim().replace(/^["']|["']$/g, "").trim();
+  }
+  return out;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, rawEnv) {
+    const env = clean(rawEnv);
     const path = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
     if (!env.API_SECRET || !env.BOT_TOKEN || !env.OWNER_ID || !env.CHANNEL_ID) {
       return new Response("not configured", { status: 503 });

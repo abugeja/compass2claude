@@ -43,6 +43,7 @@ The Claude run writes one JSON file per email to `outbox/<YYYYMMDD>-<gmail messa
 | `sections[]` | object | `heading`, `fyi` (list of one-line strings) |
 | `public_link` | string or null | Must be on the link allowlist |
 | `private` | object or null | `actions`, `dates`, `note`. Only ever sent to the owner |
+| `force` | `true` or absent | Optional. Re-post or hand-post: skips the "already posted" checks only. Guardrails and owner approval still apply. See "Posting on request" in `instructions.md` |
 
 Calendar events are built from `dates`, `private.dates`, and a "Due:" all-day event for each required action with a `due` date.
 

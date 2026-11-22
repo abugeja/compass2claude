@@ -88,21 +88,22 @@ test("only the owner can tap, and only Telegram with the secret can call the web
   assert.equal(r.status, 403);
 });
 
-test("a failed post keeps the batch and resumes without repeating parts", async () => {
+test("a failed post hands the rest to the poster and says why", async () => {
   const t = setup();
   await t.api("PUT", "/pending/b1", batch);
-  await t.tap("post:b1");
-  t.data.set("pending:b1", JSON.stringify({ ...batch, sent: 1 }));   // as if part two had failed
-  t.data.delete("decision:b1");
-  t.calls.length = 0;
+  t.data.set("pending:b1", JSON.stringify({ ...batch, sent: 1 }));   // part one already went
   t.fail(true);
   await t.tap("post:b1");
-  assert.equal(t.data.has("pending:b1"), true);
-  assert.equal(t.data.has("decision:b1"), false);
-  t.fail(false);
-  t.calls.length = 0;
-  await t.tap("post:b1");
-  assert.deepEqual(t.toChannel().map((c) => c.params.text), ["part two"]);
+  assert.equal(t.data.has("pending:b1"), false);
+  const d = JSON.parse(t.data.get("decision:b1"));
+  assert.equal(d.outcome, "approved");
+  assert.equal(d.sent, 1);
+  assert.match(d.error, /boom/);
+  const alert = t.calls.find((c) => c.method === "answerCallbackQuery");
+  assert.equal(alert.params.show_alert, true);
+  assert.match(alert.params.text, /boom/);
+  assert.ok(alert.params.text.length <= 200);
+  assert.match(t.calls.find((c) => c.method === "editMessageText").params.text, /Approved/);
 });
 
 test("re-uploading a decided batch does not bring it back", async () => {
@@ -133,4 +134,12 @@ test("strangers are ignored; /help and /learned are not feedback", async () => {
   await t.say("/help");
   await t.say("/nonsense");
   assert.equal((await (await t.api("GET", "/sync")).json()).messages.length, 0);
+});
+
+test("secrets pasted with spaces or quotes still work", async () => {
+  const t = setup();
+  t.env.OWNER_ID = " 42\n";
+  t.env.API_SECRET = '"s3cret" ';
+  await t.say("/help");
+  assert.match(t.calls.at(-1).params.text, /Feedback/);
 });

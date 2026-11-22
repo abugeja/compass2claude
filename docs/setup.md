@@ -2,6 +2,8 @@
 
 This walkthrough uses Windows and PowerShell. Notes for macOS and Linux are at the end.
 
+It sets up the laptop setup. For the cloud setup, where no computer has to be on, do steps 1 to 4 here and then follow [cloud.md](cloud.md).
+
 ## 1. Get the code
 
 ```powershell

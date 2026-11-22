@@ -541,6 +541,34 @@ class PosterTest(unittest.TestCase):
         self.run_once()
         self.assertEqual(len(self.to_channel()), 1)
 
+    def test_force_reposts_but_still_needs_approval_and_guardrails(self):
+        act = [{"text": "Pay for excursion", "due": "2026-10-16T23:59", "level": "required"}]
+        self.drop(item("a", audience="prep", actions=act))
+        self.run_once()
+        self.tap("post", "a")
+        self.assertEqual(len(self.to_channel()), 1)
+        # Same content again is dropped as already posted...
+        self.drop(item("b", audience="prep", actions=act))
+        self.run_once()
+        self.assertEqual(self.manifest()["b"]["group_status"], "withheld")
+        self.assertEqual(len(self.to_channel()), 1)
+        # ...unless forced. It still waits for the owner's tap.
+        self.drop(item("c", audience="prep", actions=act, force=True))
+        self.run_once()
+        self.assertEqual(self.manifest()["c"]["group_status"], "awaiting_approval")
+        self.assertEqual(len(self.to_channel()), 1)
+        self.tap("post", "c")
+        self.assertEqual(len(self.to_channel()), 2)
+        # Force never bypasses the guardrails or the audience rules.
+        self.drop(item("d", audience="prep", force=True,
+                       sections=[{"heading": "FYI", "fyi": ["Ask ChildName about it"]}]),
+                  item("e", audience="family", force=True,
+                       sections=[{"heading": "FYI", "fyi": ["hello"]}]))
+        self.run_once()
+        self.assertEqual(self.manifest()["d"]["group_status"], "withheld")
+        self.assertEqual(self.manifest()["e"]["group_status"], "withheld")
+        self.assertEqual(len(self.to_channel()), 2)
+
     def test_repeat_date_dropped_when_far_off(self):
         ev = {"title": "Excursion", "start": "2026-10-21", "all_day": True, "kind": "attend"}
         self.review(False)
@@ -662,6 +690,21 @@ class PosterTest(unittest.TestCase):
         self.assertEqual(self.deleted(), [msgs[1]])
         self.assertEqual(self.to_channel(), [])  # the Worker posted, not the script
         self.assertEqual(self.wcalls[-1], ("POST", "/ack", {"keys": [f"decision:{batch}"]}))
+
+    def test_worker_approved_but_unposted_is_posted_here(self):
+        self.use_worker()
+        self.drop(item("a", sections=[{"heading": "FYI", "fyi": ["x"]}]))
+        self.run_once()
+        batch = next((self.dir / "pending").glob("*.json")).stem
+        self.wsync = {"decisions": [{"key": f"decision:{batch}", "batch": batch,
+                                     "outcome": "approved", "items": ["a"], "sent": 0,
+                                     "error": "chat not found",
+                                     "at": 1791504000, "message_id": None}],
+                      "pending": []}
+        self.run_once()
+        self.assertEqual(self.manifest()["a"]["group_status"], "posted")
+        self.assertEqual(len(self.to_channel()), 1)
+        self.assertEqual(list((self.dir / "pending").glob("*.json")), [])
 
     def test_worker_feedback_saved_once_and_learnings_uploaded(self):
         self.use_worker()

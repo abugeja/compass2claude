@@ -11,7 +11,7 @@ enabled = false
 binding = "BROWSER"
 
 [vars]
-ALLOWED_HOSTS = "newsletters.naavi.com,williamstownps-vic.compass.education,williamstownps.vic.edu.au,www.williamstownps.vic.edu.au"
+ALLOWED_HOSTS = "newsletters.naavi.com,yourschool-vic.compass.education,yourschool.vic.edu.au,www.yourschool.vic.edu.au"
 
 # Secret (set with `npx wrangler secret put FETCH_KEY`, never commit it):
 #   FETCH_KEY  shared key the cloud task sends as "Authorization: Bearer <key>"

@@ -19,6 +19,8 @@ poster ◀──decisions, feedback───┘     │
 | `/learned` | Poster reads `learnings.md` | Worker answers from a copy the poster uploads whenever `learnings.md` changes |
 | Updating `manifest.json`, deleting reminder copies | Poster | Poster, on its next run |
 
+If the Worker can't reach the channel when you tap **Post**, it records the post as approved, shows Telegram's error in the tap alert, and the poster sends the remaining parts on its next run with its own `channel_id`.
+
 The Worker never decides what may be posted. It can only post the exact messages the poster uploaded for a batch, and only when your Telegram account taps **Post** on it.
 
 ## What is stored on Cloudflare

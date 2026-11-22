@@ -19,7 +19,7 @@ function env(quickAction) {
 
 test("allowlist", () => {
   assert.ok(checkUrl("https://newsletters.naavi.com/i/x/page/1", hosts).ok);
-  assert.ok(checkUrl("https://williamstownps-vic.compass.education/Communicate/News/A.aspx", hosts).ok);
+  assert.ok(checkUrl("https://yourschool-vic.compass.education/Communicate/News/A.aspx", hosts).ok);
   assert.equal(checkUrl("http://newsletters.naavi.com/", hosts).error, "https only");
   assert.equal(checkUrl("https://evil.com/", hosts).error, "host not allowed");
   assert.equal(checkUrl("https://newsletters.naavi.com.evil.com/", hosts).error, "host not allowed");
@@ -28,7 +28,7 @@ test("allowlist", () => {
 });
 
 test("scrub removes compass links and tokens", () => {
-  const md = "See [item](https://williamstownps-vic.compass.education/Feed/FeedItem.aspx?accessToken=abc123&x=1) and accessToken=zzz9";
+  const md = "See [item](https://yourschool-vic.compass.education/Feed/FeedItem.aspx?accessToken=abc123&x=1) and accessToken=zzz9";
   const out = scrub(md);
   assert.ok(!out.includes("compass.education"));
   assert.ok(!out.includes("abc123"));
@@ -37,9 +37,10 @@ test("scrub removes compass links and tokens", () => {
 });
 
 test("login detection only for compass", () => {
-  assert.ok(looksLikeLogin("Username\nPassword\nSign in", "williamstownps-vic.compass.education"));
+  assert.ok(looksLikeLogin("Username\nPassword\nSign in", "yourschool-vic.compass.education"));
   assert.ok(!looksLikeLogin("Username\nPassword", "newsletters.naavi.com"));
-  assert.ok(!looksLikeLogin("Dear Families, link below", "williamstownps-vic.compass.education"));
+  assert.ok(!looksLikeLogin("Dear Families, link below", "yourschool-vic.compass.education"));
+  assert.ok(looksLikeLogin("Verify you are human by completing the action below", "yourschool-vic.compass.education"));
 });
 
 test("key compare", () => {
@@ -66,7 +67,7 @@ test("handler: auth, method, host", async () => {
 test("handler: markdown is scrubbed", async () => {
   const e = env(async (action, opts) => {
     assert.equal(action, "markdown");
-    return new Response(JSON.stringify({ success: true, result: `Link https://williamstownps-vic.compass.education/x?accessToken=SECRET1 and ${opts.url}` }));
+    return new Response(JSON.stringify({ success: true, result: `Link https://yourschool-vic.compass.education/x?accessToken=SECRET1 and ${opts.url}` }));
   });
   const r = await worker.fetch(req({ url: "https://newsletters.naavi.com/i/x/page/2" }), e);
   assert.equal(r.status, 200);
@@ -77,14 +78,14 @@ test("handler: markdown is scrubbed", async () => {
 
 test("handler: compass login page -> 403", async () => {
   const e = env(async () => new Response(JSON.stringify({ success: true, result: "Sign in to Compass\nUsername\nPassword\nForgot password" })));
-  const r = await worker.fetch(req({ url: "https://williamstownps-vic.compass.education/Communicate/News/A.aspx?accessToken=T" }), e);
+  const r = await worker.fetch(req({ url: "https://yourschool-vic.compass.education/Communicate/News/A.aspx?accessToken=T" }), e);
   assert.equal(r.status, 403);
   assert.equal((await r.json()).error, "login_required");
 });
 
 test("handler: render error does not echo the url", async () => {
   const e = env(async () => { throw new Error("timeout"); });
-  const r = await worker.fetch(req({ url: "https://williamstownps-vic.compass.education/x?accessToken=LEAKME" }), e);
+  const r = await worker.fetch(req({ url: "https://yourschool-vic.compass.education/x?accessToken=LEAKME" }), e);
   assert.equal(r.status, 502);
   assert.ok(!(await r.text()).includes("LEAKME"));
 });

@@ -12,7 +12,7 @@ This is separate from the approvals Worker in `worker/`, and you can use either 
 ## Guardrails
 
 - **Key required.** Every request needs `Authorization: Bearer <FETCH_KEY>`, otherwise it gets 401.
-- **School sites only.** It only fetches `https://` pages on the hosts in `ALLOWED_HOSTS` (Naavi, the Compass site and the school website). Anything else gets 400.
+- **School sites only.** It only fetches `https://` pages on the hosts in `ALLOWED_HOSTS` in `wrangler.toml`. Set it to your Compass site, your external newsletter host and your school website before deploying. Anything else gets 400.
 - **No tokens out.** Compass links and `accessToken=` values are removed from every reply, so a parent's login token can't reach an outbox file.
 - **Login pages are reported, not returned.** If Compass shows a sign-in page, the Worker returns 403 `login_required`. The digest then falls back to a private "open in Compass" note.
 - **No URL logging.** Logs are off in `wrangler.toml`, and errors never echo the URL.
