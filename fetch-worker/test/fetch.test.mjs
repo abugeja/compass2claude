@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import worker, { checkUrl, scrub, looksLikeLogin, keysMatch, markdownFrom, allowedHosts } from "../src/index.js";
+import worker, { checkUrl, scrub, unwrapSafelinks, looksLikeLogin, keysMatch, markdownFrom, allowedHosts } from "../src/index.js";
 
 const hosts = allowedHosts({});
 const KEY = "test-key-123";
@@ -95,4 +95,12 @@ test("handler: screenshot passthrough", async () => {
   const r = await worker.fetch(req({ url: "https://newsletters.naavi.com/i/x/page/14", format: "screenshot" }), e);
   assert.equal(r.headers.get("content-type"), "image/png");
   assert.deepEqual(new Uint8Array(await r.arrayBuffer()), png);
+});
+
+test("safelinks are unwrapped and the sender email dropped", () => {
+  const md = "[https://volunteersignup.org/7YKXL](https://aus01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fvolunteersignup.org%2F7YKXL&data=05%7C02%7CJane.Doe%40education.vic.gov.au%7C0&reserved=0)";
+  const out = scrub(md);
+  assert.equal(out, "[https://volunteersignup.org/7YKXL](https://volunteersignup.org/7YKXL)");
+  assert.ok(!out.includes("education.vic.gov.au"));
+  assert.equal(unwrapSafelinks("https://aus01.safelinks.protection.outlook.com/?data=x"), "[link removed]");
 });

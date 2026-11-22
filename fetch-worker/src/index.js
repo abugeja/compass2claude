@@ -38,8 +38,22 @@ export function checkUrl(raw, hosts) {
   return { ok: true, url: u };
 }
 
+// Outlook "safelinks" wrap the real URL and leak the sender's email address.
+const SAFELINK_RE = /https:\/\/[a-z0-9.-]*safelinks\.protection\.outlook\.com\/\?[^\s)\]>"']*/gi;
+
+export function unwrapSafelinks(md) {
+  return md.replace(SAFELINK_RE, (link) => {
+    try {
+      const real = new URL(link).searchParams.get("url");
+      return real && /^https?:\/\//i.test(real) ? real : "[link removed]";
+    } catch {
+      return "[link removed]";
+    }
+  });
+}
+
 export function scrub(md) {
-  return md
+  return unwrapSafelinks(md)
     .replace(COMPASS_RE, "[compass link removed]")
     .replace(TOKEN_RE, "accessToken=[removed]");
 }
